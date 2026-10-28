@@ -112,5 +112,5 @@ def test_missing_dataset_raises(tmp_path: Path) -> None:
     Args:
         tmp_path: Pytest temporary directory.
     """
-    with pytest.raises(FileNotFoundError, match="train-rag-download"):
+    with pytest.raises(FileNotFoundError, match="train-rag download"):
         EnterpriseRagBenchLoader(tmp_path).load()

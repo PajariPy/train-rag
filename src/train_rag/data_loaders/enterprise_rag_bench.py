@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from pathlib import Path
 
+import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
@@ -53,10 +54,11 @@ class EnterpriseRagBenchLoader(DataLoader):
         Returns:
             The normalized artifacts.
         """
-        filters = None
+        table = pq.read_table(self.resolve(DOCUMENTS_FILE))
+        table = table.append_column("row_index", pa.array(range(table.num_rows), pa.int64()))
         if self.source_types is not None:
-            filters = pc.field("source_type").isin([str(source) for source in self.source_types])
-        table = pq.read_table(self.resolve(DOCUMENTS_FILE), filters=filters)
+            sources = [str(source) for source in self.source_types]
+            table = table.filter(pc.field("source_type").isin(sources))
 
         return [
             Artifact(
@@ -64,6 +66,8 @@ class EnterpriseRagBenchLoader(DataLoader):
                 source_type=row["source_type"],
                 title=row["title"],
                 content=row["content"],
+                source_file=str(DOCUMENTS_FILE),
+                row_index=row["row_index"],
             )
             for row in table.to_pylist()
         ]
@@ -103,6 +107,6 @@ class EnterpriseRagBenchLoader(DataLoader):
         """
         path = self.data_dir / relative
         if not path.is_file():
-            raise FileNotFoundError(f"No dataset file at {path}; run `uv run train-rag-download`.")
+            raise FileNotFoundError(f"No dataset file at {path}; run `uv run train-rag download`.")
 
         return path

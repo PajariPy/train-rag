@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: train-rag-postgres
+    environment:
+      POSTGRES_USER: train_rag
+      POSTGRES_PASSWORD: train_rag
+      POSTGRES_DB: train_rag
+    ports:
+      - "5434:5432"
+    volumes:
+      - train-rag-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U train_rag"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  train-rag-pgdata:

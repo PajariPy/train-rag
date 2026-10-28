@@ -8,12 +8,14 @@ dependencies = [
     "huggingface-hub>=2.3.0",
     "langchain-core>=1.7.0",
     "langgraph>=1.2.18",
+    "psycopg[binary]>=3.3.6",
     "pyarrow>=26.0.0",
     "pydantic>=2.14.1",
+    "sqlmodel>=0.0.48",
 ]
 
 [project.scripts]
-train-rag-download = "train_rag.download:main"
+train-rag = "train_rag.main:main"
 
 [build-system]
 requires = ["uv_build>=0.9.13,<0.10.0"]
@@ -21,11 +23,16 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "altair>=6.3.0",
     "marimo>=0.25.2",
     "mypy>=2.4.0",
     "pyarrow-stubs>=20.0.0.20260819",
     "pytest>=9.2.0",
     "ruff>=0.17.3",
+]
+exploration = [
+    "google-genai>=2.33.0",
+    "python-dotenv>=1.2.4",
 ]
 
 [tool.ruff]
@@ -35,8 +42,8 @@ line-length = 100
 select = ["E", "F", "I", "UP", "B", "D", "ANN"]
 
 [tool.ruff.lint.per-file-ignores]
-# marimo generates untyped, undocumented cell functions
-"notebooks/*" = ["ANN", "D", "E501"]
+# marimo generates untyped, undocumented cell functions; a bare last expression is displayed
+"notebooks/*" = ["ANN", "B018", "D", "E501"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

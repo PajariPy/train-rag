@@ -19,3 +19,6 @@ data/
 
 # marimo session caches
 __marimo__/
+
+# Secrets
+.env
