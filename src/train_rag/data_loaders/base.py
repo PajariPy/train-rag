@@ -1,11 +1,11 @@
-"""Common interface for all data connectors."""
+"""Common interface for all data loaders."""
 
 from abc import ABC, abstractmethod
 
-from herb_rag.models import Corpus
+from train_rag.models import Corpus
 
 
-class DataConnector(ABC):
+class DataLoader(ABC):
     """Load data from some place and normalize it into a Corpus.
 
     Subclasses own the details of where data lives and how it is shaped;

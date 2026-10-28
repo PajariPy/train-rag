@@ -1,18 +1,19 @@
 [project]
-name = "herb-rag"
+name = "train-rag"
 version = "0.1.0"
-description = "Agentic RAG over the HERB heterogeneous enterprise benchmark"
+description = "Agentic RAG over the EnterpriseRAG-Bench company knowledge benchmark"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "huggingface-hub>=2.3.0",
     "langchain-core>=1.7.0",
     "langgraph>=1.2.18",
+    "pyarrow>=26.0.0",
     "pydantic>=2.14.1",
 ]
 
 [project.scripts]
-herb-rag-download = "herb_rag.download:main"
+train-rag-download = "train_rag.download:main"
 
 [build-system]
 requires = ["uv_build>=0.9.13,<0.10.0"]
@@ -20,7 +21,9 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "marimo>=0.25.2",
     "mypy>=2.4.0",
+    "pyarrow-stubs>=20.0.0.20260819",
     "pytest>=9.2.0",
     "ruff>=0.17.3",
 ]
@@ -30,6 +33,10 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "D", "ANN"]
+
+[tool.ruff.lint.per-file-ignores]
+# marimo generates untyped, undocumented cell functions
+"notebooks/*" = ["ANN", "D", "E501"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
