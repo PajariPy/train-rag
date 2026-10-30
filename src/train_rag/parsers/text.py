@@ -7,6 +7,8 @@ SECTION_KEY = re.compile(r"^([a-z][a-z0-9_]*):[ \t]*(.*)$")
 ISO_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?")
 WRITTEN_DATE = re.compile(r"(?P<month>[A-Z][a-z]{2,8})\.? (?P<day>\d{1,2}),? (?P<year>\d{4})")
 LITERAL_NEWLINE = "\\n"
+MIN_USEFUL_CHARS = 300
+HEADING = r"[A-Z][\w /()&-]{0,40}:"
 
 
 def normalize_newlines(text: str) -> str:
@@ -140,7 +142,8 @@ def labeled_value(
     """Read the value after an inline `Label:` up to the next known label.
 
     Used for prose like `Issue summary: ... Impact: ... Environment: ...`, where
-    several labeled fields share one paragraph.
+    several labeled fields share one paragraph. A heading alone on its line, such as
+    `Background/context:`, also ends the value.
 
     Args:
         text: Text containing the label.
@@ -153,7 +156,8 @@ def labeled_value(
     """
     stops = "|".join(re.escape(stop) for stop in sorted(stop_labels, key=len, reverse=True))
     pattern = re.compile(
-        rf"(?<![\w-]){re.escape(label)}:\s*(?P<value>.*?)(?=\s+(?:{stops}):|\n\s*\n|\Z)",
+        rf"(?<![\w-]){re.escape(label)}:\s*(?P<value>.*?)"
+        rf"(?=\s+(?:{stops}):|\n\s*\n|\n[ \t]*{HEADING}[ \t]*\n|\Z)",
         re.DOTALL | (re.IGNORECASE if ignore_case else 0),
     )
     match = pattern.search(text)

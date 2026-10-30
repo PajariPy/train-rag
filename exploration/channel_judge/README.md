@@ -18,7 +18,7 @@ with a file name like the real channel-less threads.
 
 ```bash
 uv run python exploration/channel_judge/build_dataset.py                   # data/dataset.jsonl
-uv run --group exploration python exploration/channel_judge/evaluate.py    # data/predictions.jsonl, data/report.md
+uv run python exploration/channel_judge/evaluate.py    # data/predictions.jsonl, data/report.md
 ```
 
 `evaluate.py` reads `GEMINI_API_KEY` from the repository's `.env` (git-ignored).

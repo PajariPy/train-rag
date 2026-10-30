@@ -5,12 +5,14 @@ description = "Agentic RAG over the EnterpriseRAG-Bench company knowledge benchm
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "google-genai>=2.33.0",
     "huggingface-hub>=2.3.0",
     "langchain-core>=1.7.0",
     "langgraph>=1.2.18",
     "psycopg[binary]>=3.3.6",
     "pyarrow>=26.0.0",
     "pydantic>=2.14.1",
+    "python-dotenv>=1.2.4",
     "sqlmodel>=0.0.48",
 ]
 
@@ -29,10 +31,6 @@ dev = [
     "pyarrow-stubs>=20.0.0.20260819",
     "pytest>=9.2.0",
     "ruff>=0.17.3",
-]
-exploration = [
-    "google-genai>=2.33.0",
-    "python-dotenv>=1.2.4",
 ]
 
 [tool.ruff]

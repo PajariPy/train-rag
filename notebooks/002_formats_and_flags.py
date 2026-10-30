@@ -23,6 +23,8 @@ def imports():
         load_artifacts,
         sample_artifacts,
     )
+    from train_rag.repository.inferred_attendees import load_inferred_attendees
+    from train_rag.repository.inferred_date import load_inferred_dates
 
     return (
         Artifact,
@@ -36,6 +38,8 @@ def imports():
         get_document,
         get_engine,
         load_artifacts,
+        load_inferred_attendees,
+        load_inferred_dates,
         mo,
         normalize_newlines,
         re,
@@ -112,6 +116,8 @@ def analyse(
     engine,
     free_text_format,
     load_artifacts,
+    load_inferred_attendees,
+    load_inferred_dates,
     mo,
     sample_artifacts,
     sample_size,
@@ -119,7 +125,6 @@ def analyse(
     NO_PARSER = "no parser"
     SINGLE_FORMAT = "document: single format"
 
-    registry = default_registry()
     analysed_counts = Counter()
     flagged_counts = Counter()
     format_counts = defaultdict(Counter)
@@ -129,6 +134,9 @@ def analyse(
 
     with Session(engine) as _session:
         corpus_counts = count_documents_by_source(_session, DATASET)
+        registry = default_registry(
+            load_inferred_dates(_session), load_inferred_attendees(_session)
+        )
         for _source in mo.status.progress_bar(list(SourceType), title="Analysing documents"):
             if sample_size.value:
                 _artifacts = sample_artifacts(_session, DATASET, _source, sample_size.value)

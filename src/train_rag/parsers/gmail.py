@@ -6,11 +6,12 @@ import re
 from typing import ClassVar
 
 from train_rag.models import Artifact, SourceType
-from train_rag.models.parsed import EmailMessage, EmailThread
+from train_rag.models.parsed import EmailMessage, EmailThread, OpenText
 from train_rag.parsers.base import DocumentParser
-from train_rag.parsers.text import normalize_newlines, split_sections, unique
+from train_rag.parsers.text import MIN_USEFUL_CHARS, normalize_newlines, split_sections, unique
 
-HEADER = re.compile(r"^(?P<name>From|To|Cc|Date|Sent|Subject):\s*(?P<value>.*)$", re.IGNORECASE)
+HEADER = re.compile(r"^(?P<name>From|To|Cc|Bcc|Date|Sent|Subject):\s*(?P<value>.*)$", re.IGNORECASE)
+MESSAGE_SEPARATOR = re.compile(r"^-{3,}\s*message\s*\d+\s*-{3,}$", re.IGNORECASE)
 MESSAGE_START = re.compile(r"(?im)^(?=From:)")
 NUMBERED_BODY_KEY = re.compile(r"^(?:messages?|msg|m)_?\d+_body$")
 ATTACHMENTS = re.compile(r"(?im)^\s*Attach(?:ments?|ed)[^:\n]{0,30}:[ \t]*(?P<inline>.*)$")
@@ -25,13 +26,16 @@ class GmailParser(DocumentParser[EmailThread]):
     """Parse a Gmail thread stored as a list of emails, or as plain text.
 
     Most threads are a Python or JSON list of email strings; the rest are plain text
-    where each email starts at a `From:` line. Thread-level fields are flagged only
-    when no email in the thread has them, since replies often drop headers.
+    where each email starts at a `From:` line. A thread under `MIN_USEFUL_CHARS`
+    characters, with no `From:` line, or whose list items are bare bodies with no
+    headers is kept as open text.
+    Thread-level fields are flagged only when no email in the thread has them, since
+    replies often drop headers.
     """
 
     source_type: ClassVar[SourceType] = SourceType.GMAIL
 
-    def parse(self, artifact: Artifact) -> EmailThread:
+    def parse(self, artifact: Artifact) -> EmailThread | OpenText:
         """Parse one Gmail thread.
 
         Args:
@@ -40,6 +44,9 @@ class GmailParser(DocumentParser[EmailThread]):
         Returns:
             The thread with its emails and thread-level metadata.
         """
+        if len(artifact.content.strip()) < MIN_USEFUL_CHARS:
+            return self.open_text(artifact)
+
         formats: dict[str, str] = {}
         raw_messages = self.try_formats(
             "messages",
@@ -52,7 +59,13 @@ class GmailParser(DocumentParser[EmailThread]):
             ],
             formats,
         )
-        messages = [self.message(raw) for raw in raw_messages or []]
+        if not raw_messages:
+            return self.open_text(artifact)
+
+        messages = [self.message(raw) for raw in raw_messages]
+        numbered = formats["messages"] == self.messages_from_numbered_sections.__name__
+        if not numbered and not any(message.has_headers for message in messages):
+            return self.open_text(artifact)
         subject = next((message.subject for message in messages if message.subject), None)
         participants = unique(
             [
@@ -64,6 +77,9 @@ class GmailParser(DocumentParser[EmailThread]):
         )
         senders = [message.sender for message in messages if message.sender]
         recipients = [person for message in messages for person in message.recipients]
+        expected: dict[str, object] = {"messages": messages}
+        if not numbered:
+            expected |= {"sender": senders, "recipients": recipients, "subject": subject}
 
         return EmailThread(
             doc_id=artifact.id,
@@ -74,9 +90,7 @@ class GmailParser(DocumentParser[EmailThread]):
             participants=participants,
             attachments=unique([name for message in messages for name in message.attachments]),
             messages=messages,
-            missing_fields=self.missing(
-                messages=messages, sender=senders, recipients=recipients, subject=subject
-            ),
+            missing_fields=self.missing(**expected),
         )
 
     @staticmethod
@@ -122,7 +136,9 @@ class GmailParser(DocumentParser[EmailThread]):
 
         Also `messages_N_body`, `msg_N_body` and `mN_body`. Most of these emails carry
         only their body, so sender, recipients and subject stay missing; a quoted email
-        inside a body that starts at a `From:` line is split off with its headers.
+        inside a body that starts at a `From:` line is split off with its headers. These
+        read like group or company-wide mail: the sender is kept when a `From:` line
+        gives it, and missing sender, recipients or subject are not flagged.
 
         Args:
             content: Stripped Gmail document content.
@@ -145,16 +161,17 @@ class GmailParser(DocumentParser[EmailThread]):
             content: Stripped Gmail document content.
 
         Returns:
-            One string per email; the whole text when there is no `From:` line.
+            One string per email, or None when there is no `From:` line.
         """
         text = normalize_newlines(content)
-        chunks = [chunk for chunk in MESSAGE_START.split(text) if chunk.startswith("From:")]
 
-        return chunks or [text]
+        return [chunk for chunk in MESSAGE_START.split(text) if chunk.startswith("From:")] or None
 
     @staticmethod
     def message(raw: str) -> EmailMessage:
         """Parse one email's leading header block, attachments and body.
+
+        A `-----Message 1-----` line before the headers is skipped.
 
         Args:
             raw: Text of one email.
@@ -164,6 +181,9 @@ class GmailParser(DocumentParser[EmailThread]):
         """
         headers: dict[str, str] = {}
         lines = raw.strip().splitlines()
+        if lines and MESSAGE_SEPARATOR.match(lines[0].strip()):
+            lines = lines[1:]
+
         body_start = 0
         for index, line in enumerate(lines):
             match = HEADER.match(line.strip())
@@ -201,7 +221,7 @@ def string_list(decoded: object) -> list[str] | None:
 
 
 def split_addresses(value: str) -> list[str]:
-    """Split a header like `Ann <ann@x.com>, bob@y.com` into addresses.
+    """Split a header like `Ann <ann@x.com>, bob@y.com; Cy <cy@z.com>` into addresses.
 
     Args:
         value: Header value.
@@ -209,7 +229,7 @@ def split_addresses(value: str) -> list[str]:
     Returns:
         The trimmed, non-empty entries.
     """
-    return [address.strip() for address in value.split(",") if address.strip()]
+    return [address.strip() for address in re.split(r"[,;]", value) if address.strip()]
 
 
 def attachment_names(raw: str) -> list[str]:

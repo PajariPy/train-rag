@@ -3,10 +3,15 @@
 from typing import ClassVar
 
 from train_rag.models import Artifact, SourceType
-from train_rag.models.parsed import LinearTicket
+from train_rag.models.parsed import LinearTicket, OpenText
 from train_rag.parsers.base import DocumentParser
 from train_rag.parsers.people import comment_participants, parse_comments
-from train_rag.parsers.text import leading_text, normalize_newlines, section
+from train_rag.parsers.text import (
+    leading_text,
+    normalize_newlines,
+    section,
+    split_sections,
+)
 
 
 class LinearParser(DocumentParser[LinearTicket]):
@@ -18,7 +23,7 @@ class LinearParser(DocumentParser[LinearTicket]):
 
     source_type: ClassVar[SourceType] = SourceType.LINEAR
 
-    def parse(self, artifact: Artifact) -> LinearTicket:
+    def parse(self, artifact: Artifact) -> LinearTicket | OpenText:
         """Parse one Linear ticket.
 
         Args:
@@ -42,10 +47,14 @@ class LinearParser(DocumentParser[LinearTicket]):
                 self.incident_summary_section,
                 self.problem_statement_section,
                 self.objective_section,
+                self.other_summary_section,
                 self.unlabeled_description,
             ],
             formats,
         )
+        if description is None:
+            return self.open_text(artifact)
+
         comments = parse_comments(section(text, "comments") or "")
         dates = [comment.posted_at for comment in comments if comment.posted_at is not None]
 
@@ -170,8 +179,30 @@ class LinearParser(DocumentParser[LinearTicket]):
         return section(text, "objective")
 
     @staticmethod
+    def other_summary_section(text: str) -> str | None:
+        """Format 10: any other `*_summary:` section, e.g. `postmortem_summary:`.
+
+        Covers `root_cause_summary`, `impact_summary`, `requirements_summary` and the
+        like; the first one in the ticket is used.
+
+        Args:
+            text: Normalized ticket content.
+
+        Returns:
+            The first `*_summary` section text, or None when there is none.
+        """
+        return next(
+            (
+                body
+                for key, body in split_sections(text).items()
+                if key.endswith("_summary") and body
+            ),
+            None,
+        )
+
+    @staticmethod
     def unlabeled_description(text: str) -> str | None:
-        """Format 10: prose with no section key, often under labels like `Summary:`.
+        """Format 11: prose with no section key, often under labels like `Summary:`.
 
         Args:
             text: Normalized ticket content.

@@ -4,10 +4,15 @@ import re
 from typing import ClassVar
 
 from train_rag.models import Artifact, SourceType
-from train_rag.models.parsed import JiraTicket
+from train_rag.models.parsed import JiraTicket, OpenText
 from train_rag.parsers.base import DocumentParser
 from train_rag.parsers.people import comment_participants, parse_comments
-from train_rag.parsers.text import labeled_value, leading_text, normalize_newlines, section
+from train_rag.parsers.text import (
+    labeled_value,
+    leading_text,
+    normalize_newlines,
+    section,
+)
 
 SUMMARY_VARIANT_KEYS = (
     "summary_long",
@@ -56,12 +61,14 @@ class JiraParser(DocumentParser[JiraTicket]):
     The description holds inline labels (`Issue summary: ... Impact: ...
     Environment: ...`), or an `Issue summary` line followed by bullets.
     `Issue summary` serves as the ticket summary for now. The description and the
-    issue summary come in several formats, one method each, tried in order.
+    issue summary come in several formats, one method each, tried in order. A ticket
+    with no description or no issue summary is kept as open text: the leftover text
+    has no structure to rely on. Parsed tickets are never flagged.
     """
 
     source_type: ClassVar[SourceType] = SourceType.JIRA
 
-    def parse(self, artifact: Artifact) -> JiraTicket:
+    def parse(self, artifact: Artifact) -> JiraTicket | OpenText:
         """Parse one Jira ticket.
 
         Args:
@@ -85,10 +92,13 @@ class JiraParser(DocumentParser[JiraTicket]):
             ],
             formats,
         )
-        labeled_text = description or text
+        if description is None:
+            return self.open_text(artifact)
+
+        description = normalize_newlines(description)
         issue_summary = self.try_formats(
             "issue_summary",
-            labeled_text,
+            description,
             [
                 self.inline_issue_summary,
                 self.issue_summary_block,
@@ -97,6 +107,9 @@ class JiraParser(DocumentParser[JiraTicket]):
             ],
             formats,
         ) or self.try_formats("issue_summary", text, [self.summary_variant_section], formats)
+        if issue_summary is None:
+            return self.open_text(artifact)
+
         comments = parse_comments(section(text, "comments") or "")
         dates = [comment.posted_at for comment in comments if comment.posted_at is not None]
 
@@ -107,12 +120,11 @@ class JiraParser(DocumentParser[JiraTicket]):
             formats=formats,
             issue_summary=issue_summary,
             description=description,
-            impact=labeled_value(labeled_text, "Impact", DESCRIPTION_LABELS),
-            environment=labeled_value(labeled_text, "Environment", DESCRIPTION_LABELS),
+            impact=labeled_value(description, "Impact", DESCRIPTION_LABELS),
+            environment=labeled_value(description, "Environment", DESCRIPTION_LABELS),
             comments=comments,
             participants=comment_participants(comments),
             first_activity_at=min(dates, default=None),
-            missing_fields=self.missing(description=description, issue_summary=issue_summary),
         )
 
     @staticmethod
@@ -194,7 +206,7 @@ class JiraParser(DocumentParser[JiraTicket]):
         """Issue summary format 1: an inline label, `Issue summary: ... Impact: ...`.
 
         Args:
-            text: The description, or the whole ticket when it has no description.
+            text: The ticket description.
 
         Returns:
             The issue summary, or None when there is no inline label.
@@ -206,7 +218,7 @@ class JiraParser(DocumentParser[JiraTicket]):
         """Issue summary format 2: an `Issue summary` line followed by the summary lines.
 
         Args:
-            text: The description, or the whole ticket when it has no description.
+            text: The ticket description.
 
         Returns:
             The issue summary, or None when there is no such block.
@@ -220,7 +232,7 @@ class JiraParser(DocumentParser[JiraTicket]):
         """Issue summary format 3: the inline label in another case, `Issue Summary:`.
 
         Args:
-            text: The description, or the whole ticket when it has no description.
+            text: The ticket description.
 
         Returns:
             The issue summary, or None when there is no such label.
@@ -232,7 +244,7 @@ class JiraParser(DocumentParser[JiraTicket]):
         """Issue summary format 4: a plain `Summary:` label.
 
         Args:
-            text: The description, or the whole ticket when it has no description.
+            text: The ticket description.
 
         Returns:
             The summary, or None when there is no such label.

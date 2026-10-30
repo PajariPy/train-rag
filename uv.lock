@@ -1994,12 +1994,14 @@ name = "train-rag"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "google-genai" },
     { name = "huggingface-hub" },
     { name = "langchain-core" },
     { name = "langgraph" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pyarrow" },
     { name = "pydantic" },
+    { name = "python-dotenv" },
     { name = "sqlmodel" },
 ]
 
@@ -2012,19 +2014,17 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
-exploration = [
-    { name = "google-genai" },
-    { name = "python-dotenv" },
-]
 
 [package.metadata]
 requires-dist = [
+    { name = "google-genai", specifier = ">=2.33.0" },
     { name = "huggingface-hub", specifier = ">=2.3.0" },
     { name = "langchain-core", specifier = ">=1.7.0" },
     { name = "langgraph", specifier = ">=1.2.18" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pyarrow", specifier = ">=26.0.0" },
     { name = "pydantic", specifier = ">=2.14.1" },
+    { name = "python-dotenv", specifier = ">=1.2.4" },
     { name = "sqlmodel", specifier = ">=0.0.48" },
 ]
 
@@ -2036,10 +2036,6 @@ dev = [
     { name = "pyarrow-stubs", specifier = ">=20.0.0.20260819" },
     { name = "pytest", specifier = ">=9.2.0" },
     { name = "ruff", specifier = ">=0.17.3" },
-]
-exploration = [
-    { name = "google-genai", specifier = ">=2.33.0" },
-    { name = "python-dotenv", specifier = ">=1.2.4" },
 ]
 
 [[package]]

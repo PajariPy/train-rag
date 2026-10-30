@@ -236,10 +236,165 @@ What I'd keep from this: test the judge on data I can check before trusting it o
 can't; let its mistakes show me where my own rule was vague; and when I only need a number,
 sample instead of running everything.
 
+## The last flags: open text, and two more LLM helpers
+
+After the Slack judge, every source still had a small pile of flagged documents. I went
+through them one source at a time, and each time asked the same question: is this a format
+I don't know yet, or a document that just doesn't have this field?
+
+### A few more formats
+
+Some of the remaining flags were still formats:
+
+| What I found | Where |
+|---|---|
+| A `Bcc:` header, and emails separated by `-----Message 2-----` lines | Gmail |
+| `msg_N_body:` sections with only a sender: a group or company-wide message, so I keep the sender and expect nothing else | Gmail |
+| The description under `summary:` or `detailed_description:` | GitHub |
+| The description under any `*_summary:` key: `root_cause_summary`, `impact_summary`, `postmortem_summary`… | Linear |
+
+### Open text
+
+The rest had no structure to find. A Gmail "thread" that's just a list of message bodies
+with no headers, a Jira ticket with no issue summary, a Linear issue that's one paragraph
+with no keys. I could keep writing formats for these, but there's nothing left to extract.
+The useful part is the text itself.
+
+So I added a fallback for every parser: when a document matches none of its source's
+formats, the parser returns **open text** instead of a half-filled model. Open text is the
+whole document, with line breaks normalised, and nothing else. It's never flagged, because
+nothing is expected from it.
+
+It also gets the same length rule I first used for Slack: open text under 300 characters is
+marked **not useful**. Most of it is "status: open", "tbd" or a two-word reply, and isn't
+worth embedding. The same goes for a whole Gmail thread under 300 characters.
+
+Having one class for this matters later. Every unstructured document, from any source, will
+go through the same preprocessing, instead of each source getting its own special case.
+
+| Source | Open text | Of which not useful |
+|---|---:|---:|
+| Jira | 370 | 1 |
+| Fireflies | 131 | 3 |
+| Gmail | 30 | 8 |
+| Slack | 24 | 23 |
+| Linear | 13 | 0 |
+| GitHub | 1 | 0 |
+
+For Jira this replaced the open question from my last round: a ticket without an
+`Issue summary` is open text. A few lines of the ticket might be orphaned outside any
+section, but without a summary there's nothing to attach them to.
+
+### Meeting dates: another LLM judge
+
+Fireflies was different. About 1,500 meetings had no date in their header, and here the
+date matters: it's what puts a meeting in order with the emails and tickets around it. But
+a meeting without a date header still says a lot about its date: "send the pricing
+sheet by 2026-03-06", "after the latency regression on the 12th", a file named
+`qbr-aug2026.pdf`. So I built a second judge, the same way as the Slack one.
+
+**First, test it.** I took meetings whose date I knew and removed it: every header line with
+a date and every line that repeats it. Then I made 70 test cases:
+
+- **25 with a clue hidden** in one of five ways: someone saying today's date, a dated event
+  "2 days ago", a deadline "one week from today", a "week of" banner, or a file name stamped
+  with today's date.
+- **25 without one:** 15 with no date at all, and 10 with a date that says nothing about
+  when the meeting was held, like an event years ago or a contract expiring years ahead.
+- **20 real meetings** that keep their own dates in the text (mostly action-item due dates),
+  to see how close the judge gets on clues as they actually occur.
+
+The judge returns a date, how precise it is (day, week or month), and a quote as evidence.
+
+The first run had two false positives. Both were my fault: my date stripping missed
+compact dates like `20260610` and forms like `july12`, so the "no date" meetings still had
+one. After fixing the stripping, the judge got all 50 synthetic cases right. On the 20 real
+meetings, every date was within 3 days, with a median of 1 day off. That makes sense:
+"deliverables by Friday" says the meeting was in the days before that Friday, not on which
+day. So most answers come back with week precision.
+
+**Then, run it on everything.** This time I needed a date for every meeting, not a share,
+so sampling wouldn't help. I used Gemini's batch API instead: half the price, with results
+within 24 hours.
+
+| | Meetings |
+|---|---:|
+| Judged | 1,499 |
+| Date found | 1,137 (901 to the week, 234 to the day, 2 to the month) |
+| No date in the text | 362 |
+| Cost | $5.52 (I estimated $3.50; the model thought for longer than I expected) |
+
+126 of the dates come from evidence with no year in it ("by Tue 9/14"), so their year is a
+guess, and I store that alongside the date. A few outliers (2021, 2024) are worth a look
+before relying on them.
+
+**Inferred is not parsed.** The judge's answer doesn't go into `held_on`. It goes into a
+separate field, `held_on_inferred`, stored in its own table with the method that produced
+it. The parser uses it only when the header has no date. Retrieval can then decide how far
+to trust a week-precision guess, and a rerun with a better judge replaces only its own rows.
+
+Meetings where the judge found nothing keep an empty date. There's nothing left to recover,
+so they aren't flagged any more either.
+
+### Attendees: a small extractor
+
+16 meetings had no attendee list, and their transcripts used speaker labels my parser
+didn't recognise: `Speaker 1 (Jasmine):`, `[S00:00] Ari (Redwood AE):`. Writing formats for
+16 documents wasn't worth it, so a small LLM call lists the people who speak in each one,
+with a role when the text gives one. It found speakers in all 16, for a few cents. Like the
+dates, they're stored separately as `attendees_inferred`.
+
+Meetings with no Fireflies summary became open text, like everything else without its key
+field.
+
+### Zero flags isn't zero bugs
+
+A flag only says a field is *missing*. It says nothing about a field that's there but holds
+the wrong text. So, as a last check, I measured every parsed field in characters and looked
+at the largest values. A summary of 20,000 characters isn't a summary.
+
+The outliers found six bugs that no flag could have shown:
+
+| Field | What was wrong | Largest before → after |
+|---|---|---:|
+| Fireflies summary and topics | without a `transcript:` key, they ran on into the transcript | 20,779 → 1,205 |
+| Fireflies duration | `~46 minutes. Attendees: …` on one line | 205 → 66 |
+| Gmail recipients | lists separated by `;` were kept as one string | 3,462 → 774 |
+| Slack messages | ` dave_oncall:` or `maria gonzalez:` lines were merged into the message above | first message, p99: 575 → 437 |
+| Jira issue summary and impact | escaped line breaks, and values running past headings | 3,161 → 1,372 |
+
+Slack was the tricky one. A looser speaker pattern would split those messages, but it also
+matches `name:` and `max_tokens:` lines in code blocks. Thread starters are almost always
+people, so I took the first names of everyone who starts threads (453 of them) and let a
+looser line start a message only when its speaker has one of those names, or is a bot.
+Code keys stay inside their messages.
+
+What's still large is real: incident threads written on one line, emails that quote the
+whole thread below them, and Linear issues that are full product specs. Those are a
+chunking problem, not a parsing one.
+
+### Where things stand
+
+| Source | Documents | Parsed | Open text | Flagged |
+|---|---:|---:|---:|---:|
+| Slack | 285,605 | 285,581 | 24 | 0 |
+| Gmail | 121,390 | 121,360 | 30 | 0 |
+| Linear | 35,308 | 35,295 | 13 | 0 |
+| HubSpot | 15,017 | 15,017 | 0 | 0 |
+| Fireflies | 10,173 | 10,042 | 131 | 0 |
+| GitHub | 8,052 | 8,051 | 1 | 0 |
+| Jira | 6,120 | 5,750 | 370 | 0 |
+
+Every document of the seven parsed sources is now either a typed model or open text, and
+nothing is waiting for review. In Fireflies, 1,119 meetings use an inferred date and 342
+have none; 16 use inferred attendees.
+
+Earlier I wrote that the goal wasn't zero. It still isn't: the zero comes from deciding what
+each leftover document *is*, not from forcing every document into a model.
+
 ## What's next
 
 - Store the parsed results in Postgres next to the raw documents.
 - Generate cheap LLM summaries for the sources that don't have a free one (Slack, Gmail, Linear,
   Google Drive, HubSpot, Confluence), with a cost estimate before each run.
-- Decide what flagged documents should use instead, starting with Jira tickets that have no
-  `Issue summary`.
+- Decide the shared preprocessing for open text.

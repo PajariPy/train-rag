@@ -2,7 +2,7 @@
 
 Reads GEMINI_API_KEY from the repository's `.env`.
 
-Run: uv run --group exploration python exploration/channel_judge/evaluate.py
+Run: uv run python exploration/channel_judge/evaluate.py
 """
 
 import json

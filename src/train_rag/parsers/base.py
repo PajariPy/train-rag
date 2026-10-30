@@ -5,7 +5,8 @@ from collections.abc import Callable, Sequence
 from typing import ClassVar
 
 from train_rag.models import Artifact, SourceType
-from train_rag.models.parsed import ParsedDocument
+from train_rag.models.parsed import OpenText, ParsedDocument
+from train_rag.parsers.text import MIN_USEFUL_CHARS, normalize_newlines
 
 
 class DocumentParser[ParsedT: ParsedDocument](ABC):
@@ -17,21 +18,42 @@ class DocumentParser[ParsedT: ParsedDocument](ABC):
 
     When a field is written in several formats, the parser has one method per format
     and tries them in order with `try_formats`; to support a new format, add a method
-    and put it in that list.
+    and put it in that list. A document in none of the formats is returned as
+    `OpenText` by `open_text`.
     """
 
     source_type: ClassVar[SourceType]
 
     @abstractmethod
-    def parse(self, artifact: Artifact) -> ParsedT:
+    def parse(self, artifact: Artifact) -> ParsedT | OpenText:
         """Parse one document.
 
         Args:
             artifact: Raw document of this parser's source type.
 
         Returns:
-            The parsed fields and the expected fields that are missing.
+            The parsed fields and the expected fields that are missing, or the whole
+            document as open text when it is in none of the formats.
         """
+
+    def open_text(self, artifact: Artifact) -> OpenText:
+        """Keep a document in none of the formats as one block of open text.
+
+        Args:
+            artifact: Raw document.
+
+        Returns:
+            The whole text; not useful when under `MIN_USEFUL_CHARS` characters.
+        """
+        text = normalize_newlines(artifact.content).strip()
+
+        return OpenText(
+            doc_id=artifact.id,
+            source_type=self.source_type,
+            document_id=artifact.document_id,
+            text=text,
+            useful=len(text) >= MIN_USEFUL_CHARS,
+        )
 
     @staticmethod
     def missing(**fields: object) -> list[str]:

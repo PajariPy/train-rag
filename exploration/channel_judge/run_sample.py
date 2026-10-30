@@ -5,7 +5,7 @@ all channel-less threads reveal their channel in the text. It is stratified by t
 of title, so each kind gets its own estimate. The run stops before it spends more than
 `BUDGET_USD`, using the token counts Gemini reports.
 
-Run: uv run --group exploration python exploration/channel_judge/run_sample.py
+Run: uv run python exploration/channel_judge/run_sample.py
 """
 
 import json

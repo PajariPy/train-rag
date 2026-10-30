@@ -5,24 +5,17 @@ import re
 from typing import ClassVar
 
 from train_rag.models import Artifact, SourceType
-from train_rag.models.parsed import SlackMessage, SlackThread
+from train_rag.models.parsed import OpenText, SlackMessage, SlackThread
 from train_rag.parsers.base import DocumentParser
+from train_rag.parsers.speakers import (
+    BRACED_SPEAKER_LINE,
+    BRACKETED_SPEAKER_LINE,
+    LOOSE_SPEAKER_LINE,
+    speaker_messages,
+    strict_speaker_messages,
+)
 from train_rag.parsers.text import normalize_newlines, unique
 
-SPEAKER_LINE = re.compile(
-    r"^(?P<speaker>[A-Za-z][\w.\-]*(?: [A-Z][\w.\-]*){0,2})"
-    r"(?: \((?P<role>[^)\n]{1,40})\))?:\s?(?P<text>.*)$"
-)
-LOOSE_SPEAKER_LINE = re.compile(
-    r"^\s*(?P<speaker>[A-Za-z][\w.\-]*(?: [A-Za-z][\w.\-]*){0,2})\s*"
-    r"(?:\((?P<role>[^)\n]{1,40})\)|\s-\s(?P<dash_role>[A-Za-z][\w &/-]{0,30}))?"
-    r":\s?(?P<text>.*)$"
-)
-BRACKETED_SPEAKER_LINE = re.compile(
-    r"^\s*\[(?P<speaker>[A-Za-z][\w.\- ]{0,40})\]\s*(?:\d{9,10}(?:\.\d+)?)?\s*:\s?(?P<text>.*)$"
-)
-BRACED_SPEAKER_LINE = re.compile(r"^\s*\{(?P<speaker>[A-Za-z][\w.\- ]{0,40})\}\s*:\s?(?P<text>.*)$")
-MIN_USEFUL_CHARS = 300
 KNOWN_CHANNELS = frozenset(
     {
         "all-hands",
@@ -71,12 +64,12 @@ class SlackParser(DocumentParser[SlackThread]):
     titles are leaked file paths, where the channel is recovered from
     `slack/<channel>/...` when present, or numbers, sentences and one-off slugs. A
     thread with no channel is labelled a group chat rather than flagged. A thread with
-    no messages in any format is marked not useful.
+    no messages in any format is kept as open text.
     """
 
     source_type: ClassVar[SourceType] = SourceType.SLACK
 
-    def parse(self, artifact: Artifact) -> SlackThread:
+    def parse(self, artifact: Artifact) -> SlackThread | OpenText:
         """Parse one Slack thread.
 
         Args:
@@ -89,24 +82,20 @@ class SlackParser(DocumentParser[SlackThread]):
         channel = self.try_formats(
             "channel", artifact.title, [self.channel_from_title, self.channel_from_path], formats
         )
-        messages = (
-            self.try_formats(
-                "messages",
-                artifact.content,
-                [
-                    self.messages_from_speaker_lines,
-                    self.messages_from_python_list,
-                    self.messages_from_loose_speaker_lines,
-                    self.messages_from_bracketed_speakers,
-                    self.messages_from_braced_speakers,
-                    self.messages_from_unstructured_text,
-                ],
-                formats,
-            )
-            or []
+        messages = self.try_formats(
+            "messages",
+            artifact.content,
+            [
+                self.messages_from_speaker_lines,
+                self.messages_from_python_list,
+                self.messages_from_loose_speaker_lines,
+                self.messages_from_bracketed_speakers,
+                self.messages_from_braced_speakers,
+            ],
+            formats,
         )
-        thread_starter = messages[0] if messages else None
-        useful = bool(messages)
+        if not messages:
+            return self.open_text(artifact)
 
         return SlackThread(
             doc_id=artifact.id,
@@ -115,11 +104,9 @@ class SlackParser(DocumentParser[SlackThread]):
             formats=formats,
             channel=channel,
             chat_type="channel" if channel else "group_chat",
-            thread_starter=thread_starter,
+            thread_starter=messages[0],
             participants=unique([message.speaker for message in messages if message.speaker]),
             messages=messages,
-            missing_fields=self.missing(messages=messages) if useful else [],
-            useful=useful,
         )
 
     @staticmethod
@@ -158,13 +145,17 @@ class SlackParser(DocumentParser[SlackThread]):
     def messages_from_speaker_lines(content: str) -> list[SlackMessage] | None:
         """Format 1: one `speaker: text` or `Name (Role): text` line per message.
 
+        Lines written the looser way of format 3 (` dave_oncall:`, `maria gonzalez:`)
+        also start a message when the speaker's first name is a known one; see
+        `known_speaker_line`.
+
         Args:
             content: Raw thread text.
 
         Returns:
             The messages in order, or None when no line starts with a speaker.
         """
-        return speaker_messages(normalize_newlines(content).splitlines(), SPEAKER_LINE) or None
+        return strict_speaker_messages(normalize_newlines(content).splitlines())
 
     @staticmethod
     def messages_from_python_list(content: str) -> list[SlackMessage] | None:
@@ -191,7 +182,7 @@ class SlackParser(DocumentParser[SlackThread]):
 
         lines = [line for item in decoded for line in normalize_newlines(str(item)).splitlines()]
 
-        return speaker_messages(lines, SPEAKER_LINE) or None
+        return strict_speaker_messages(lines)
 
     @staticmethod
     def messages_from_loose_speaker_lines(content: str) -> list[SlackMessage] | None:
@@ -209,7 +200,7 @@ class SlackParser(DocumentParser[SlackThread]):
         """
         lines = normalize_newlines(content).splitlines()
 
-        return speaker_messages(lines, LOOSE_SPEAKER_LINE) or None
+        return speaker_messages(lines, LOOSE_SPEAKER_LINE.match) or None
 
     @staticmethod
     def messages_from_bracketed_speakers(content: str) -> list[SlackMessage] | None:
@@ -225,7 +216,7 @@ class SlackParser(DocumentParser[SlackThread]):
         """
         lines = normalize_newlines(content).splitlines()
 
-        return speaker_messages(lines, BRACKETED_SPEAKER_LINE) or None
+        return speaker_messages(lines, BRACKETED_SPEAKER_LINE.match) or None
 
     @staticmethod
     def messages_from_braced_speakers(content: str) -> list[SlackMessage] | None:
@@ -239,53 +230,4 @@ class SlackParser(DocumentParser[SlackThread]):
         """
         lines = normalize_newlines(content).splitlines()
 
-        return speaker_messages(lines, BRACED_SPEAKER_LINE) or None
-
-    @staticmethod
-    def messages_from_unstructured_text(content: str) -> list[SlackMessage] | None:
-        """Format 6: text with no speaker lines, kept as one message with no known sender.
-
-        Shorter text (an id, a list of names, `(end)`) is not worth indexing: no
-        message is returned, and the thread is marked not useful.
-
-        Args:
-            content: Raw thread text.
-
-        Returns:
-            One message with no speaker, or None when the text is under
-            `MIN_USEFUL_CHARS` characters.
-        """
-        text = normalize_newlines(content).strip()
-        if len(text) < MIN_USEFUL_CHARS:
-            return None
-
-        return [SlackMessage(speaker=None, text=text)]
-
-
-def speaker_messages(lines: list[str], speaker_line: re.Pattern[str]) -> list[SlackMessage]:
-    """Split lines into messages; lines without a speaker continue the previous one.
-
-    Args:
-        lines: Thread lines.
-        speaker_line: Pattern of a line that starts a message, with `speaker`, `text`
-            and optional `role` or `dash_role` groups.
-
-    Returns:
-        The messages in order.
-    """
-    messages: list[SlackMessage] = []
-    for line in lines:
-        match = speaker_line.match(line)
-        if match is not None:
-            groups = match.groupdict()
-            messages.append(
-                SlackMessage(
-                    speaker=match.group("speaker"),
-                    role=groups.get("role") or groups.get("dash_role"),
-                    text=match.group("text").strip(),
-                )
-            )
-        elif messages and line.strip():
-            messages[-1].text = f"{messages[-1].text}\n{line}"
-
-    return messages
+        return speaker_messages(lines, BRACED_SPEAKER_LINE.match) or None

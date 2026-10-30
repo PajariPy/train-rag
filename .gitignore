@@ -22,3 +22,10 @@ __marimo__/
 
 # Secrets
 .env
+
+# Scratch notes, not committed
+temp/
+
+# Gemini batch inputs and raw outputs (large, regenerable)
+exploration/*/data/batch_requests.jsonl
+exploration/*/data/batch_results.jsonl

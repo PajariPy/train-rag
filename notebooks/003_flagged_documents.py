@@ -15,6 +15,8 @@ def imports():
     from train_rag.models import SourceType
     from train_rag.parsers import default_registry
     from train_rag.repository.document import get_document, load_artifacts
+    from train_rag.repository.inferred_attendees import load_inferred_attendees
+    from train_rag.repository.inferred_date import load_inferred_dates
 
     return (
         Counter,
@@ -24,6 +26,8 @@ def imports():
         get_document,
         get_engine,
         load_artifacts,
+        load_inferred_attendees,
+        load_inferred_dates,
         mo,
     )
 
@@ -33,8 +37,9 @@ def _(mo):
     mo.md("""
     # Flagged documents
 
-    Every document a parser flagged because an expected field is missing, plus the ones
-    marked not useful (too little content to index), across all parsed types, for review.
+    Every document a parser flagged because an expected field is missing, across all
+    parsed types, for review. Documents marked not useful (too little content to index)
+    are left out: there is nothing in them to fix.
     Google Drive and Confluence have no parser, so nothing there is flagged. Parsing the
     whole database takes about two minutes.
 
@@ -52,41 +57,48 @@ def scan(
     default_registry,
     get_engine,
     load_artifacts,
+    load_inferred_attendees,
+    load_inferred_dates,
     mo,
 ):
     DATASET = "enterprise_rag_bench"
-    NOT_USEFUL = "not useful"
 
     def review_reasons(parsed):
-        """Missing fields, plus `not useful` for documents with too little content."""
-        return [*parsed.missing_fields, *([] if parsed.useful else [NOT_USEFUL])]
+        """Missing expected fields; documents marked not useful have none."""
+        return parsed.missing_fields
 
     engine = get_engine()
-    registry = default_registry()
-    parsed_types = [source for source in SourceType if registry.get(source) is not None]
     analysed_counts = Counter()
     flagged = []
 
     with Session(engine) as _session:
+        registry = default_registry(
+            load_inferred_dates(_session), load_inferred_attendees(_session)
+        )
+        parsed_types = [source for source in SourceType if registry.get(source) is not None]
         for _source in mo.status.progress_bar(parsed_types, title="Parsing all documents"):
             for _artifact in load_artifacts(_session, DATASET, _source):
                 analysed_counts[_source] += 1
                 _parsed = registry.parse(_artifact)
                 if _parsed is not None and review_reasons(_parsed):
                     flagged.append((_artifact, _parsed))
-    return NOT_USEFUL, analysed_counts, engine, flagged, parsed_types, review_reasons
+    return analysed_counts, engine, flagged, parsed_types, review_reasons
 
 
 @app.cell
-def summary(Counter, NOT_USEFUL, analysed_counts, flagged, mo, parsed_types, review_reasons):
+def summary(
+    Counter,
+    analysed_counts,
+    flagged,
+    mo,
+    parsed_types,
+    review_reasons,
+):
     flagged_by_type = Counter(parsed.source_type for _artifact, parsed in flagged)
     missing_by_type = Counter(
         (parsed.source_type, field)
         for _artifact, parsed in flagged
         for field in review_reasons(parsed)
-    )
-    not_useful_count = sum(
-        count for (_source, field), count in missing_by_type.items() if field == NOT_USEFUL
     )
     type_rows = [
         {
@@ -113,7 +125,6 @@ def summary(Counter, NOT_USEFUL, analysed_counts, flagged, mo, parsed_types, rev
                 [
                     mo.stat(f"{sum(analysed_counts.values()):,}", label="Parsed documents"),
                     mo.stat(f"{len(flagged):,}", label="To review"),
-                    mo.stat(f"{not_useful_count:,}", label="Of which not useful"),
                 ],
                 justify="start",
             ),
@@ -142,7 +153,7 @@ def _(flagged, mo):
 
 
 @app.cell
-def _(missing_by_type, mo, type_filter):
+def _(analysed_counts, flagged, missing_by_type, mo, type_filter):
     field_filter = mo.ui.dropdown(
         options=[
             "all",
@@ -157,12 +168,41 @@ def _(missing_by_type, mo, type_filter):
         value="all",
         label="Reason",
     )
-    field_filter
+    _selected_type = next(
+        (source for source in analysed_counts if str(source) == type_filter.value), None
+    )
+    if _selected_type is None:
+        _share = mo.md("_Pick a type to see the share of each missing field._")
+    else:
+        _type_documents = analysed_counts[_selected_type]
+        _type_flagged = sum(1 for _artifact, parsed in flagged if parsed.source_type == _selected_type)
+        _share = mo.ui.table(
+            [
+                {
+                    "missing field": field,
+                    "documents": count,
+                    "% of type": f"{count / _type_documents:.2%}",
+                    "% of flagged in type": f"{count / _type_flagged:.2%}",
+                }
+                for (source, field), count in sorted(missing_by_type.items(), key=lambda item: -item[1])
+                if source == _selected_type
+            ],
+            selection=None,
+            label=f"{type_filter.value}: {_type_flagged:,} flagged of {_type_documents:,} documents",
+        )
+    mo.vstack([field_filter, _share])
     return (field_filter,)
 
 
 @app.cell
-def flagged_table(field_filter, flagged, mo, review_reasons, title_filter, type_filter):
+def flagged_table(
+    field_filter,
+    flagged,
+    mo,
+    review_reasons,
+    title_filter,
+    type_filter,
+):
     rows = [
         {
             "document_id": artifact.document_id,

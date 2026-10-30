@@ -3,7 +3,7 @@
 from typing import ClassVar
 
 from train_rag.models import Artifact, SourceType
-from train_rag.models.parsed import GithubPullRequest
+from train_rag.models.parsed import GithubPullRequest, OpenText
 from train_rag.parsers.base import DocumentParser
 from train_rag.parsers.people import comment_participants, parse_comments
 from train_rag.parsers.text import leading_text, normalize_newlines, section
@@ -19,7 +19,7 @@ class GithubParser(DocumentParser[GithubPullRequest]):
 
     source_type: ClassVar[SourceType] = SourceType.GITHUB
 
-    def parse(self, artifact: Artifact) -> GithubPullRequest:
+    def parse(self, artifact: Artifact) -> GithubPullRequest | OpenText:
         """Parse one pull request.
 
         Args:
@@ -38,10 +38,15 @@ class GithubParser(DocumentParser[GithubPullRequest]):
                 self.body_section,
                 self.pr_body_section,
                 self.content_section,
+                self.detailed_description_section,
+                self.summary_section,
                 self.unlabeled_description,
             ],
             formats,
         )
+        if description is None:
+            return self.open_text(artifact)
+
         review = self.try_formats(
             "review_comments",
             text,
@@ -120,8 +125,32 @@ class GithubParser(DocumentParser[GithubPullRequest]):
         return section(text, "content")
 
     @staticmethod
+    def detailed_description_section(text: str) -> str | None:
+        """Format 5: a `detailed_description:` section, usually after a short `summary:`.
+
+        Args:
+            text: Normalized pull request content.
+
+        Returns:
+            The section text, or None when the section is absent or empty.
+        """
+        return section(text, "detailed_description")
+
+    @staticmethod
+    def summary_section(text: str) -> str | None:
+        """Format 6: a `summary:` section instead of `description:`.
+
+        Args:
+            text: Normalized pull request content.
+
+        Returns:
+            The section text, or None when the section is absent or empty.
+        """
+        return section(text, "summary")
+
+    @staticmethod
     def unlabeled_description(text: str) -> str | None:
-        """Format 5: prose with no section key, e.g. `Motivation: ...`.
+        """Format 7: prose with no section key, e.g. `Motivation: ...`.
 
         Args:
             text: Normalized pull request content.

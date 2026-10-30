@@ -16,6 +16,15 @@ class EmailMessage(BaseModel):
     attachments: list[str] = Field(default_factory=list)
     body: str
 
+    @property
+    def has_headers(self) -> bool:
+        """Tell whether the email carries any header.
+
+        Returns:
+            True when it has a sender, recipients, a date or a subject.
+        """
+        return bool(self.sender or self.recipients or self.cc or self.date or self.subject)
+
 
 class EmailThread(ParsedDocument):
     """An email thread with thread-level metadata collected from its messages.
