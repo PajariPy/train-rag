@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # Postgres 16 with pgvector and pgvectorscale (StreamingDiskANN index) for embeddings.
+    image: timescale/timescaledb-ha:pg16
     container_name: train-rag-postgres
     environment:
       POSTGRES_USER: train_rag
@@ -9,11 +10,14 @@ services:
     ports:
       - "5434:5432"
     volumes:
-      - train-rag-pgdata:/var/lib/postgresql/data
+      - train-rag-pgdata-vector:/home/postgres/pgdata
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U train_rag"]
       interval: 5s
       retries: 10
 
 volumes:
-  train-rag-pgdata:
+  train-rag-pgdata-vector:
+    # Fixed name: the data was created under the compose project "rag-herb" (the old
+    # folder name), so it must not depend on which folder compose runs from.
+    name: rag-herb_train-rag-pgdata-vector

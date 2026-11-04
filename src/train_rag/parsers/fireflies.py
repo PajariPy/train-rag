@@ -432,7 +432,6 @@ def labeled_block(header: str, label: re.Pattern[str]) -> str | None:
     return "\n".join(lines) or None
 
 
-
 def is_transcript_line(line: str) -> bool:
     """Tell whether a line is a transcript line: `[00:00] ...` or `00:00 Name: ...`.
 

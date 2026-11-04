@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 
-from train_rag.models.parsed import InferredDate, Person
+from train_rag.models.parsed import InferredDate, Person, SlackMessage
 from train_rag.parsers.base import DocumentParser
 from train_rag.parsers.fireflies import FirefliesParser
 from train_rag.parsers.github import GithubParser
@@ -17,6 +17,7 @@ from train_rag.parsers.slack import SlackParser
 def default_registry(
     inferred_dates: Mapping[int, InferredDate] | None = None,
     inferred_attendees: Mapping[int, list[Person]] | None = None,
+    inferred_messages: Mapping[int, list[SlackMessage]] | None = None,
 ) -> ParserRegistry:
     """Build a registry with the default parser of every parsed source.
 
@@ -27,13 +28,15 @@ def default_registry(
             from `load_inferred_dates`; Fireflies meetings without a header date use them.
         inferred_attendees: Speakers listed by an LLM, keyed by document id, from
             `load_inferred_attendees`; Fireflies meetings without attendees use them.
+        inferred_messages: Slack messages split by an LLM, keyed by document id, from
+            `load_inferred_messages`; those threads use them instead of the parsed split.
 
     Returns:
         The registry; call `register` on it to swap a parser.
     """
     return ParserRegistry(
         [
-            SlackParser(),
+            SlackParser(inferred_messages),
             GmailParser(),
             LinearParser(),
             JiraParser(),

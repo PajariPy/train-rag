@@ -88,6 +88,44 @@ deleted the exact conflict the benchmark is testing.
 So I kept every document. In my database a document is identified by where it came from (source
 file and row), not by `doc_id`. Each parsed document links back to its row.
 
+### How long is a document?
+
+Size decides a lot later: whether a document fits an embedding model in one piece, how many
+chunks it becomes, and what it costs to send to an LLM. Characters are easy to count but hard
+to picture, so I also turned them into printed pages.
+
+The page is a Letter or A4 sheet with normal margins, a 14 pt font and single spacing. That's
+about 65 characters per line and 40 lines per page, so roughly 2,600 characters when every line
+is full. Lines aren't always full, though. Every line break starts a new line, so a Slack thread
+of short messages takes up more paper than its character count suggests. I count it the way a
+printer would: each line of text takes at least one printed line, and long lines wrap.
+
+| Source | Documents | Median chars | Median pages | 90th percentile pages | Largest (pages) | Total pages |
+|---|---:|---:|---:|---:|---:|---:|
+| Confluence | 5,189 | 9,579 | 6.0 | 8.4 | 19.6 | 32,486 |
+| Fireflies | 10,173 | 11,080 | 5.5 | 7.5 | 28.4 | 59,459 |
+| Gmail | 121,390 | 7,036 | 4.5 | 5.5 | 10.7 | 553,432 |
+| Google Drive | 25,108 | 7,005 | 4.0 | 5.2 | 18.4 | 101,586 |
+| Jira | 6,120 | 5,557 | 3.0 | 3.7 | 6.7 | 18,172 |
+| Linear | 35,308 | 5,041 | 2.6 | 3.8 | 10.8 | 96,835 |
+| GitHub | 8,052 | 4,616 | 2.2 | 3.3 | 7.8 | 18,683 |
+| Slack | 285,605 | 3,239 | 1.9 | 3.0 | 8.9 | 557,986 |
+| HubSpot | 15,017 | 3,025 | 1.7 | 2.5 | 4.5 | 26,366 |
+| **All** | **511,962** | **4,276** | **2.5** | **5.0** | **28.4** | **≈1.47 million** |
+
+A few things stand out:
+
+- **The whole company is about 1.5 million printed pages.** Slack and Gmail make up three
+  quarters of it.
+- **A typical document is short: 2 to 6 pages.** Even the longest one, a Fireflies meeting
+  transcript, is 28 pages.
+- **Real pages hold far less than a full one.** In practice a page holds 1,560 to 2,040
+  characters, not 2,600, because of short lines and blank lines. Dividing characters by 2,600
+  would undercount the pages by about a third.
+
+The sizes are explored in notebook `005_document_sizes.py`, which also lists the longest
+documents to read.
+
 ## Parsing without an LLM
 
 With a picture of the data, I wrote parsers. They're deterministic: regular expressions and
@@ -395,6 +433,9 @@ each leftover document *is*, not from forcing every document into a model.
 ## What's next
 
 - Store the parsed results in Postgres next to the raw documents.
-- Generate cheap LLM summaries for the sources that don't have a free one (Slack, Gmail, Linear,
-  Google Drive, HubSpot, Confluence), with a cost estimate before each run.
 - Decide the shared preprocessing for open text.
+
+I had planned to generate LLM summaries next, for the six sources without a free one. The cost
+estimate changed my mind: about $480 for every document. Before spending that, I compared
+cheaper ways to search the documents, and that's the next post:
+[First retrieval baselines](002_first_retrieval_baselines.md).

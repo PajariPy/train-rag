@@ -25,6 +25,7 @@ def imports():
     )
     from train_rag.repository.inferred_attendees import load_inferred_attendees
     from train_rag.repository.inferred_date import load_inferred_dates
+    from train_rag.repository.inferred_messages import load_inferred_messages
 
     return (
         Artifact,
@@ -40,6 +41,7 @@ def imports():
         load_artifacts,
         load_inferred_attendees,
         load_inferred_dates,
+        load_inferred_messages,
         mo,
         normalize_newlines,
         re,
@@ -118,6 +120,7 @@ def analyse(
     load_artifacts,
     load_inferred_attendees,
     load_inferred_dates,
+    load_inferred_messages,
     mo,
     sample_artifacts,
     sample_size,
@@ -135,7 +138,9 @@ def analyse(
     with Session(engine) as _session:
         corpus_counts = count_documents_by_source(_session, DATASET)
         registry = default_registry(
-            load_inferred_dates(_session), load_inferred_attendees(_session)
+            load_inferred_dates(_session),
+            load_inferred_attendees(_session),
+            load_inferred_messages(_session),
         )
         for _source in mo.status.progress_bar(list(SourceType), title="Analysing documents"):
             if sample_size.value:

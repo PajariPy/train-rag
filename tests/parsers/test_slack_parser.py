@@ -5,7 +5,7 @@ from collections.abc import Callable
 import pytest
 
 from train_rag.models import Artifact
-from train_rag.models.parsed import OpenText, SlackThread
+from train_rag.models.parsed import OpenText, SlackMessage, SlackThread
 from train_rag.parsers import SlackParser
 
 LoadDocument = Callable[[str], Artifact]
@@ -244,3 +244,23 @@ def test_keeps_lowercase_labels_inside_messages(real_document: LoadDocument) -> 
 
     assert thread.participants == ["ian", "maria", "alex", "devex-bot", "lisa"]
     assert "form fields: Name" in thread.messages[6].text
+
+
+def test_uses_inferred_messages_when_stored(real_document: LoadDocument) -> None:
+    """A thread an LLM split takes those messages, marked `messages_inferred`.
+
+    Args:
+        real_document: Fixture loader.
+    """
+    document = real_document("slack_channel").model_copy(update={"document_id": 7})
+    split = [
+        SlackMessage(speaker="deploy-bot", text="Kicking off staged canary."),
+        SlackMessage(speaker="olivia", role="SRE", text="watching the dashboards"),
+    ]
+
+    thread = SlackParser({7: split}).parse(document)
+
+    assert isinstance(thread, SlackThread)
+    assert thread.messages == split
+    assert thread.participants == ["deploy-bot", "olivia"]
+    assert thread.formats["messages"] == "messages_inferred"

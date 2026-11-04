@@ -17,6 +17,7 @@ def imports():
     from train_rag.repository.document import get_document, load_artifacts
     from train_rag.repository.inferred_attendees import load_inferred_attendees
     from train_rag.repository.inferred_date import load_inferred_dates
+    from train_rag.repository.inferred_messages import load_inferred_messages
 
     return (
         Counter,
@@ -28,6 +29,7 @@ def imports():
         load_artifacts,
         load_inferred_attendees,
         load_inferred_dates,
+        load_inferred_messages,
         mo,
     )
 
@@ -59,6 +61,7 @@ def scan(
     load_artifacts,
     load_inferred_attendees,
     load_inferred_dates,
+    load_inferred_messages,
     mo,
 ):
     DATASET = "enterprise_rag_bench"
@@ -73,7 +76,9 @@ def scan(
 
     with Session(engine) as _session:
         registry = default_registry(
-            load_inferred_dates(_session), load_inferred_attendees(_session)
+            load_inferred_dates(_session),
+            load_inferred_attendees(_session),
+            load_inferred_messages(_session),
         )
         parsed_types = [source for source in SourceType if registry.get(source) is not None]
         for _source in mo.status.progress_bar(parsed_types, title="Parsing all documents"):

@@ -2,6 +2,7 @@
 
 import ast
 import re
+from collections.abc import Mapping
 from typing import ClassVar
 
 from train_rag.models import Artifact, SourceType
@@ -64,10 +65,21 @@ class SlackParser(DocumentParser[SlackThread]):
     titles are leaked file paths, where the channel is recovered from
     `slack/<channel>/...` when present, or numbers, sentences and one-off slugs. A
     thread with no channel is labelled a group chat rather than flagged. A thread with
-    no messages in any format is kept as open text.
+    no messages in any format is kept as open text. When an LLM split the thread into
+    messages (several messages on one line, or code lines taken for speakers), that split
+    is used instead, with the format `messages_inferred`.
     """
 
     source_type: ClassVar[SourceType] = SourceType.SLACK
+
+    def __init__(self, inferred_messages: Mapping[int, list[SlackMessage]] | None = None) -> None:
+        """Set up the parser.
+
+        Args:
+            inferred_messages: Messages an LLM split, keyed by document id, from
+                `load_inferred_messages`; None when they are not loaded.
+        """
+        self.inferred_messages = inferred_messages or {}
 
     def parse(self, artifact: Artifact) -> SlackThread | OpenText:
         """Parse one Slack thread.
@@ -94,6 +106,10 @@ class SlackParser(DocumentParser[SlackThread]):
             ],
             formats,
         )
+        inferred = self.inferred_messages.get(artifact.document_id or -1)
+        if inferred:
+            messages = inferred
+            formats["messages"] = "messages_inferred"
         if not messages:
             return self.open_text(artifact)
 

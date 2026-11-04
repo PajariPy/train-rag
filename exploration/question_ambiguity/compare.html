@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare documents</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e2e1dc;
+    --accent: #2f6f9f; --good: #2f855a; --warn: #b7791f; --chip: #eef3f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --panel: #1f1f1d; --ink: #ecebe6; --muted: #a09f98; --line: #34332f;
+      --accent: #7fb3d9; --good: #68c290; --warn: #e0b25c; --chip: #263038;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg);
+           border-bottom: 1px solid var(--line); padding: 10px 16px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .bar .grow { flex: 1; }
+  button, select, textarea { font: inherit; color: var(--ink); background: var(--panel);
+           border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; }
+  button { cursor: pointer; }
+  button.choice[aria-pressed="true"] { border-color: var(--accent); outline: 2px solid var(--accent); }
+  button.save { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+  .question { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+              max-height: 24vh; overflow-y: auto; }
+  .question summary { cursor: pointer; color: var(--muted); }
+  .question p { margin: 2px 0; }
+  .question ul { margin: 2px 0; padding-left: 18px; }
+  .label { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .label textarea { flex: 1; min-width: 200px; height: 34px; resize: vertical; }
+  .status { color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 12px 16px; }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+         display: flex; flex-direction: column; min-width: 0; }
+  .col h2 { font-size: 13px; margin: 0; padding: 8px 10px 0; color: var(--muted); font-weight: 600; }
+  .col .name { padding: 2px 10px; font-weight: 600; }
+  .col .meta { padding: 0 10px 8px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); }
+  .chip { display: inline-block; background: var(--chip); border-radius: 4px; padding: 0 6px; margin-right: 4px; }
+  .expected-chip { color: var(--good); font-weight: 600; }
+  .col pre { margin: 0; padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere;
+             overflow-y: auto; font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; flex: 1; }
+  .col .empty { padding: 16px 10px; color: var(--muted); }
+  .answer { margin: 8px 10px 0; padding: 8px 10px; border-radius: 6px; background: var(--chip);
+            font-size: 13px; max-height: 22vh; overflow-y: auto; }
+  .answer.none { color: var(--muted); }
+  .answer .quote { margin-top: 4px; color: var(--muted); font-style: italic; }
+  .answer .reasoning { margin-top: 6px; font-size: 12px; }
+  .answer .warn { color: var(--warn); font-size: 12px; }
+  mark { background: #ffe08a; color: #1d1d1b; border-radius: 2px; }
+  @media (prefers-color-scheme: dark) { mark { background: #8a6d1f; color: #fff7dd; } }
+  @media (max-width: 900px) {
+    main, .question { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <button id="prev" title="Previous (←)">←</button>
+    <select id="picker"></select>
+    <button id="next" title="Next (→)">→</button>
+    <span id="progress" class="status"></span>
+    <span class="grow"></span>
+    <span class="status">Keys: ← → move · A ambiguous · N not ambiguous · U unsure · Ctrl+Enter save</span>
+  </div>
+  <div class="question" id="question"></div>
+  <div class="label">
+    <button class="choice" id="ambiguous" aria-pressed="false">Ambiguous</button>
+    <button class="choice" id="clear" aria-pressed="false">Not ambiguous</button>
+    <button class="choice" id="unsure" aria-pressed="false">Unsure</button>
+    <textarea id="note" placeholder="Note (optional)"></textarea>
+    <button class="save" id="save">Save</button>
+    <span id="saved" class="status"></span>
+  </div>
+</header>
+<main id="columns"></main>
+<script>
+const state = { data: null, labels: {}, index: 0, choice: null };
+const $ = (id) => document.getElementById(id);
+const escape = (text) => String(text).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+async function load() {
+  const [data, labels] = await Promise.all([fetch("/api/data").then((r) => r.json()), fetch("/api/labels").then((r) => r.json())]);
+  state.data = data; state.labels = labels;
+  const first = data.questions.findIndex((q) => !labels[q.id]);
+  state.index = first === -1 ? 0 : first;
+  render();
+}
+
+function highlight(text, quote) {
+  // The quoted passage, marked in the escaped text: exact match first, then ignoring spacing.
+  if (!quote) return { html: escape(text), found: true };
+  let start = text.indexOf(quote), end = start + quote.length;
+  if (start === -1) {
+    const words = quote.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const match = new RegExp(words.join("\\s+")).exec(text);
+    if (match) { start = match.index; end = start + match[0].length; }
+  }
+  if (start === -1) return { html: escape(text), found: false };
+  return { html: escape(text.slice(0, start)) + "<mark>" + escape(text.slice(start, end)) + "</mark>" + escape(text.slice(end)), found: true };
+}
+
+function column(title, docId, similarity, isExpected) {
+  const doc = state.data.documents[docId];
+  if (!doc) return `<section class="col"><h2>${escape(title)}</h2><div class="empty">Document not found.</div></section>`;
+  const q = state.data.questions[state.index];
+  const answer = (state.data.answers[q.id] || {})[docId];
+  const chips = [`<span class="chip">${escape(doc.type)}</span>`];
+  if (similarity !== null) chips.push(`<span class="chip">similarity ${similarity.toFixed(3)}</span>`);
+  if (isExpected) chips.push(`<span class="chip expected-chip">expected</span>`);
+  const answered = answer && answer.coverage !== "none";
+  const marked = highlight(doc.text, answered ? answer.quote : "");
+  let box = `<div class="answer none">No answer generated for this document.</div>`;
+  if (answered) {
+    const level = answer.coverage === "full" ? "Full answer" : "Partial answer";
+    box = `<div class="answer"><b>${level} from this document:</b> ${escape(answer.answer)}
+      <div class="quote">“${escape(answer.quote)}”</div>
+      ${answer.reasoning ? `<div class="reasoning"><b>Reasoning:</b> ${escape(answer.reasoning)}</div>` : ""}
+      ${marked.found ? "" : `<div class="warn">Quote not found word for word in the text.</div>`}</div>`;
+  } else if (answer) {
+    box = `<div class="answer none">This document doesn't answer the question.
+      ${answer.reasoning ? `<div class="reasoning"><b>Reasoning:</b> ${escape(answer.reasoning)}</div>` : ""}</div>`;
+  }
+  return `<section class="col"><h2>${escape(title)}</h2>
+    <div class="name">${escape(doc.name)}</div>
+    <div class="meta">${chips.join("")} <code>${escape(docId)}</code> · ${doc.chars.toLocaleString()} characters</div>
+    ${box}
+    <pre>${marked.html}</pre></section>`;
+}
+
+function expectedColumn(q) {
+  if (!q.expected.length) return `<section class="col"><h2>Expected</h2><div class="empty">No expected document: the corpus holds no answer to this question.</div></section>`;
+  const options = q.expected.map((id, i) => {
+    const rank = q.top2.findIndex((h) => h.doc_id === id);
+    const where = rank === -1 ? "not in gte's top 2" : `= gte #${rank + 1}`;
+    const doc = state.data.documents[id];
+    return `<option value="${i}">${i + 1}/${q.expected.length}: ${escape(doc ? doc.name : id)} (${where})</option>`;
+  }).join("");
+  const chosen = state.expectedIndex ?? 0;
+  const id = q.expected[chosen];
+  const rank = q.top2.findIndex((h) => h.doc_id === id);
+  const title = rank === -1 ? "Expected (not in gte's top 2)" : `Expected (same as gte #${rank + 1})`;
+  const picker = q.expected.length > 1 ? `<div style="padding: 6px 10px 0"><select id="expectedPicker">${options}</select></div>` : "";
+  return column(title, id, null, true).replace("<h2>", `${picker}<h2>`);
+}
+
+function render() {
+  const q = state.data.questions[state.index];
+  const saved = state.labels[q.id] || {};
+  state.choice = saved.label || null;
+  $("picker").innerHTML = state.data.questions.map((x, i) => `<option value="${i}">${i + 1}. ${x.id} ${state.labels[x.id] ? "✓" : "·"}</option>`).join("");
+  $("picker").value = String(state.index);
+  $("progress").textContent = `${Object.keys(state.labels).length} / ${state.data.questions.length} labelled`;
+  const facts = q.facts.length
+    ? `<details><summary>Gold facts (${q.facts.length})</summary><ul>${q.facts.map((f) => `<li>${escape(f)}</li>`).join("")}</ul></details>`
+    : "";
+  $("question").innerHTML = `<div><p><b>${escape(q.id)}</b> <span class="chip">${escape(q.type)}</span></p><p>${escape(q.text)}</p></div>
+    <div><p><b>Gold answer:</b> ${escape(q.gold_answer)}</p>${facts}</div>`;
+  $("note").value = saved.note || "";
+  $("saved").textContent = saved.labelled_at ? `saved ${saved.labelled_at}` : "";
+  renderChoice();
+  const cols = q.top2.map((h, i) => column(`gte #${i + 1}`, h.doc_id, h.gte_similarity, q.expected.includes(h.doc_id)));
+  $("columns").innerHTML = cols.join("") + expectedColumn(q);
+  const picker = $("expectedPicker");
+  if (picker) {
+    picker.value = String(state.expectedIndex ?? 0);
+    picker.onchange = () => { state.expectedIndex = Number(picker.value); render(); };
+  }
+  sizeColumns();
+  document.querySelectorAll(".col pre").forEach((pre) => {
+    const mark = pre.querySelector("mark");
+    if (mark) pre.scrollTop = Math.max(0, mark.offsetTop - pre.offsetTop - 60);
+  });
+}
+
+function renderChoice() {
+  $("ambiguous").setAttribute("aria-pressed", String(state.choice === "ambiguous"));
+  $("clear").setAttribute("aria-pressed", String(state.choice === "not ambiguous"));
+  $("unsure").setAttribute("aria-pressed", String(state.choice === "unsure"));
+}
+
+function sizeColumns() {
+  const height = window.innerHeight - document.querySelector("header").offsetHeight - 24;
+  document.querySelectorAll(".col").forEach((c) => { c.style.height = `${Math.max(height, 320)}px`; });
+}
+
+function go(index) {
+  const count = state.data.questions.length;
+  state.index = (index + count) % count;
+  state.expectedIndex = 0;
+  render();
+}
+
+async function save() {
+  if (!state.choice) { $("saved").textContent = "pick Ambiguous, Not ambiguous or Unsure first"; return; }
+  const q = state.data.questions[state.index];
+  const response = await fetch(`/api/labels/${q.id}`, {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ label: state.choice, note: $("note").value }),
+  });
+  state.labels = await response.json();
+  const next = state.data.questions.findIndex((x, i) => i > state.index && !state.labels[x.id]);
+  const any = state.data.questions.findIndex((x) => !state.labels[x.id]);
+  go(next !== -1 ? next : any !== -1 ? any : state.index);
+}
+
+$("prev").onclick = () => go(state.index - 1);
+$("next").onclick = () => go(state.index + 1);
+$("picker").onchange = () => go(Number($("picker").value));
+$("ambiguous").onclick = () => { state.choice = "ambiguous"; renderChoice(); };
+$("clear").onclick = () => { state.choice = "not ambiguous"; renderChoice(); };
+$("unsure").onclick = () => { state.choice = "unsure"; renderChoice(); };
+$("save").onclick = save;
+window.addEventListener("resize", sizeColumns);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { save(); return; }
+  if (["TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+  if (e.key === "ArrowLeft") go(state.index - 1);
+  else if (e.key === "ArrowRight") go(state.index + 1);
+  else if (e.key.toLowerCase() === "a") { state.choice = "ambiguous"; renderChoice(); }
+  else if (e.key.toLowerCase() === "n") { state.choice = "not ambiguous"; renderChoice(); }
+  else if (e.key.toLowerCase() === "u") { state.choice = "unsure"; renderChoice(); }
+});
+load();
+</script>
+</body>
+</html>

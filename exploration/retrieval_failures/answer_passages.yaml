@@ -1,0 +1,92 @@
+# The passage of each expected document that holds the answer, by question id.
+# Read by notebooks/006_why_search_misses.py.
+qst_0178: |
+  Configuration and defaults: default kernel_stability_threshold=0.92 (fraction of
+  microbench runs that must pass), anneal_step_interval=30s, min_stable_window=2m.
+qst_0184: |
+  Proposed 3 slots (all PT):
+  - Tue Oct 24 — 10:00–11:15
+  …
+  Tue Oct 24 10:00 PT works for our team.
+qst_0185: |
+  Karthik: Quick proposal from the numbers + constraints: commit 40% capacity in us-east
+  (cheap + availability), 40% in eu-west (SLO + discounted commit), 20% in ap-southeast
+  (smaller commit, accept mixed SKUs). Keep a 10% global burst pool on low-cost spot-ish
+  capacity for short-lived surges.
+qst_0186: |
+  Storage: per-customer LRU store (Redis) for hot sessions; long-term anchors in S3 with
+  TTL 30d.
+qst_0187: |
+  AC7: Auto-remediation flows: If a critical regression (safety or composite drop >
+  threshold) is detected and sustained for two consecutive evaluation windows, the platform
+  must: (a) automatically shift traffic back to the last-known-good model for up to 75% of
+  traffic, (b) open an incident in the tracking system with a pre-filled template, and (c)
+  notify on-call via PagerDuty and the Console alerting channel.
+qst_0190: |
+  Deprecated field removed: optimize.legacy_hint (previously used for heuristic-only
+  recommendations). Action: remove any usages in saved route configs. Failure to remove
+  will return 400 in API calls that include the field.
+qst_0191: |
+  Root cause hypothesis: Combination of aggressive in-memory batching in the
+  dense-index-service and a recent change that increased batch size for latency
+  optimization caused larger transient memory usage. When a pod was OOM-killed, in-memory
+  batch in producer was lost before flush to audit log, creating both search inconsistency
+  and missing billing events.
+qst_0196: |
+  NF4 PTQ on 7B gives ~1.8x token throughput improvement vs fp16 at batch=1 on A100, loss
+  ~+0.6 ppl for story prompts (small sample).
+qst_0197: |
+  2) Quick Impact Triage (5–10m)
+  - Primary Resolver: confirm service(s) affected using dashboards…
+  3) Stabilize Traffic (10–20m)
+  - If applicable, apply graduated traffic control: rate-limits, scaled back routing
+  policies, or traffic-division to healthy regions.
+qst_0201: |
+  Sam C: +1. I flipped the circuit-breaker for the model-cache service to 'soft' at 20:35
+  UTC to reduce fanout to downstream p99-slow nodes. … This has cut the retry storm but
+  error_rate still ~3.8%.
+qst_0204: |
+  next_steps_detail: 1) Upload canonical prompt set & 2k sample chats to POC sandbox… 2)
+  SE to deliver parity-run plan + baseline metrics by 2026-03-04. 3) Redwood to send
+  Dedicated term sheet and committed tier options by 2026-03-10. 4) Schedule security QA
+  with Pillarhaven infra week of 2026-03-08.
+qst_0207: |
+  Rollout plan: feature gated behind experiment flag "obs.route_tags_tool_calls" for three
+  days in canary, then staged rollout to 25% traffic, then full rollout assuming no
+  regressions.
+qst_0212: |
+  Span names: ingress.request -> scheduler.queue -> model.exec -> emitter.stream ->
+  exporter.kv_lookup. Required span tags: request_id, tenant_id, route, model_variant,
+  kv_hit (true/false), batch_id (if batched), prompt_sha (hash of prompt prefix),
+  token_count. Trace size policy: prefer compact spans; only include prompt_sha, not raw
+  prompt.
+qst_0213: |
+  Next steps (explicit):
+  - Provide 14-day trial API keys + 50M free tokens for benchmark.
+qst_0214: |
+  2026-03-13T09:27Z - Autoscale controller reported repeated scale-up errors:
+  'quota_exceeded' … 2026-03-13T09:42Z - Manual rollback: rolled back runtime build
+  runtime-1.21.7 -> runtime-1.21.4 on two affected zones; autoscaler recovered and
+  headroom returned to >30% by 09:50Z.
+qst_0218: |
+  2) Each card exposes primary actions: Add to Canary, Pause Rollout, Trigger Fallback
+  Variant, Open Debug Shell (link), and Mark Investigating.
+qst_0219: |
+  3) Cap & insurance: We cannot accept an uncapped $5M demand for order-form customers.
+  Proposed commercial compromise: a per-claim cap equal to the greater of (i) 12 months of
+  fees paid under the Order Form or (ii) $1,000,000.
+qst_0220: |
+  mike: Short-term mitigation: reduce prefetch_window to 2 and lower batch_trigger to 4. …
+  Example flags: `slab_coalesce=true`, `max_reuse_age=3`
+
+  anna: Tried that on a canary run. Results after 200 requests: peak_gpu down ~12%,
+  compaction_events down to 4, OOMs -> 0. Latency p50 +3ms, p95 +18ms (acceptable for this
+  workload).
+qst_0221: |
+  9) Metrics and SLAs for People Ops services
+  - New hire full provisioning SLA: 5 business days (US), 10 business days (EMEA/APAC).
+qst_0224: |
+  elaine: … re: examples that reference "user_email" we should switch to "actor_id" to
+  avoid showing emails in docs.
+  …
+  sec_ari: … We should call out tokenization: prefer tokenized_actor_id in examples.
