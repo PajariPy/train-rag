@@ -20,9 +20,16 @@ class SourceType(StrEnum):
 
 
 class Artifact(BaseModel):
-    """A single retrievable item, normalized across all data loaders."""
+    """A single retrievable item, normalized across all data loaders.
+
+    `document_id` is the row id in the Postgres `documents` table; it is set only
+    when the artifact was loaded from the database.
+    """
 
     id: str
     source_type: SourceType
     title: str
     content: str
+    source_file: str | None = None
+    row_index: int | None = None
+    document_id: int | None = None

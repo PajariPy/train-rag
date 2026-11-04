@@ -1,6 +1,5 @@
 """Download the EnterpriseRAG-Bench dataset from Hugging Face."""
 
-import argparse
 from pathlib import Path
 
 from huggingface_hub import snapshot_download
@@ -26,13 +25,3 @@ def download_dataset(data_dir: Path) -> Path:
     )
 
     return Path(local_dir)
-
-
-def main() -> None:
-    """Run the download from the command line."""
-    parser = argparse.ArgumentParser(description="Download EnterpriseRAG-Bench.")
-    parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
-    args = parser.parse_args()
-
-    path = download_dataset(args.data_dir)
-    print(f"EnterpriseRAG-Bench downloaded to {path}")
