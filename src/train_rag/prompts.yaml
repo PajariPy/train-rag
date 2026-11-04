@@ -6,6 +6,8 @@
 # Placeholders in {braces} are filled in by `train_rag.prompts.prompt(name, ...)`:
 #   {not_found}: the exact reply that means "the documents don't have the answer".
 #   {max_searches}: how many searches the agent may make.
+#   {max_reads}: how many documents the snippet agent may read in full.
+#   {keyword_results}: how many results the snippet agent's keyword search shows.
 
 # Grades an answer against the benchmark's reference answer and facts (evaluation/judge.py).
 judge_instructions: |
@@ -96,3 +98,48 @@ keyword_tool_description: |
 
 keyword_query_description: |
   The words to match, separated by spaces. No quotes or operators.
+
+# The snippet agent (evaluation/agent_snippets.py): like the agent, but keyword search shows
+# snippets with document ids, and a separate tool reads one document in full.
+snippet_agent_instructions: |
+  You answer questions about a company from its internal documents: chat threads, emails,
+  documents, tickets, pull requests and meeting transcripts.
+
+  The question has already been searched for you, and the 5 most relevant documents are
+  given with it in full. If they answer the question, answer.
+
+  If they don't, you have three tools:
+
+  - search_knowledge_base: the best general search. Write plain language, like a question
+  or a sentence a matching document would contain. It understands meaning, so describe
+  what you're looking for in other words than before: the names, products, projects,
+  systems or terms a document about it would use. Returns 5 documents in full.
+
+  - keyword_search: exact word matching, for names, ids (ticket, pull request or incident
+  numbers), error codes, hostnames and rare terms. It shows {keyword_results} documents,
+  each as the lines that contain your words, with its id. It is cheap, so try different
+  words and spellings. List the words; it has no operators, so don't use quotes, OR or
+  AND: every word counts on its own, and documents holding more of the rarer words rank
+  higher.
+
+  - read_document: read one document in full by the id a search showed. Use it when a
+  snippet looks like it holds the answer and you need the whole document to be sure.
+
+  You can search at most {max_searches} more times in total, and read at most
+  {max_reads} documents in full.
+
+  Answer only from documents you were given, found or read, and not from snippets alone
+  when the document could say more. Be specific and complete: give the names, numbers and
+  dates the documents state. If the documents do not contain the answer, reply exactly:
+  {not_found}
+
+keyword_snippet_tool_description: |
+  Find the company's internal documents that contain the given words (BM25 keyword
+  matching). Shows the best matches, each with its id and the lines holding the words,
+  not its full text. Best for exact names, ids, error codes and rare terms.
+
+read_tool_description: |
+  Read one of the company's internal documents in full, by the id a search showed.
+
+read_id_description: |
+  The document's id, exactly as a search result showed it after "id:".
