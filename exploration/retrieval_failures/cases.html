@@ -53,10 +53,24 @@
   #list button[aria-current="true"] { background: var(--accent-wash); border-left-color: var(--accent); }
   #list .qid { font-weight: 600; font-size: 14px; }
   #list .meta { font-size: 12.5px; color: var(--ink-3); }
+  #list .noted {
+    margin-left: 8px; font: 500 11.5px var(--sans); color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 999px; padding: 0 7px; vertical-align: 1px;
+  }
+
+  .note { margin-top: 32px; }
+  .note label { display: block; font: 600 14px var(--sans); color: var(--ink-2); margin-bottom: 6px; }
+  .note textarea {
+    width: 100%; resize: vertical; font: 400 16px/1.55 var(--serif); color: var(--ink);
+    background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px;
+  }
+  .note textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+  .note p { margin: 6px 0 0; }
 
   /* reading column */
   main { padding: 40px 48px 120px; overflow-x: hidden; }
-  .column { max-width: 780px; }
+  .column { max-width: 780px; margin: 0 auto; }
+  .judge-line { margin: -14px 0 24px; font-size: 15.5px; color: var(--ink-2); }
   .eyebrow { color: var(--ink-3); font-size: 14px; margin: 0 0 10px; }
   h2.question { font: 500 27px/1.35 var(--serif); margin: 0 0 28px; letter-spacing: -0.005em; }
   h3 { font: 600 17px/1.3 var(--sans); margin: 44px 0 12px; }
@@ -143,13 +157,17 @@ const GROUPS = {
   ambiguous: o => o === "full" || o === "partial",
   all: () => true,
 };
-let cases = [], visible = [], current = null, filter = "problem";
+let cases = [], visible = [], current = null, filter = "problem", notes = {};
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+/* The judge in one line: the best rating among the 5 given documents, and the expected one's. */
+const judgeLine = c => c.given_best == null && c.expected_coverage == null ? "judge: not rated"
+  : `judge: given ${c.given_best ?? "—"} · expected ${c.expected_coverage ?? "—"}`;
 const fmt = n => n == null ? "—" : n.toLocaleString("en-US");
 
 async function init() {
   cases = await (await fetch("/api/cases")).json();
+  notes = await (await fetch("/api/notes")).json();
   document.querySelectorAll(".filters button").forEach(b => b.onclick = () => setFilter(b.dataset.filter));
   const fromHash = location.hash.slice(1);
   if (fromHash && !GROUPS.problem(cases.find(c => c.id === fromHash)?.outcome)) filter = "all";
@@ -162,9 +180,10 @@ function setFilter(name, pick) {
   visible = cases.filter(c => GROUPS[name](c.outcome));
   document.getElementById("list").innerHTML = visible.map(c => `
     <li><button data-id="${c.id}">
-      <span class="qid">${c.id}</span>
+      <span class="qid">${c.id}<span class="noted" ${notes[c.id] ? "" : "hidden"}>noted</span></span>
       <span class="meta">${esc(c.outcome_label)}</span>
       <span class="meta">${esc(c.source)} · BM25 #${fmt(c.bm25_rank)} · gte #${fmt(c.gte_rank)}</span>
+      <span class="meta">${judgeLine(c)}</span>
     </button></li>`).join("");
   document.querySelectorAll("#list button").forEach(b => b.onclick = () => show(b.dataset.id));
   const target = visible.find(c => c.id === pick) || visible.find(c => c.id === current) || visible[0];
@@ -184,7 +203,36 @@ async function show(id) {
   document.getElementById("case").innerHTML = render(c);
   document.querySelectorAll("details[data-doc]").forEach(d => d.addEventListener("toggle", () => loadDoc(d), {once: true}));
   document.querySelectorAll("button.read").forEach(b => b.onclick = () => toggleRow(b));
+  wireNote(id);
   window.scrollTo(0, 0);
+}
+
+/* Save the note a second after typing stops, and when the box loses focus. */
+function wireNote(id) {
+  const box = document.getElementById("note"), status = document.getElementById("note-status");
+  let timer = null, sent = box.value;
+  const save = async () => {
+    clearTimeout(timer);
+    if (box.value === sent) return;
+    const text = box.value;
+    status.textContent = "Saving…";
+    try {
+      const r = await fetch("/api/note/" + id, {
+        method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({text}),
+      });
+      if (!r.ok) throw new Error(r.status);
+      const saved = await r.json();
+      sent = text;
+      if (saved.text) notes[id] = saved; else delete notes[id];
+      status.textContent = saved.text ? "Saved" : "Note removed";
+      const mark = document.querySelector(`#list button[data-id="${id}"] .noted`);
+      if (mark) mark.hidden = !saved.text;
+    } catch (err) {
+      status.textContent = "Not saved: the server didn't answer. Your text is still here; try again.";
+    }
+  };
+  box.addEventListener("input", () => { status.textContent = "Editing…"; clearTimeout(timer); timer = setTimeout(save, 1000); });
+  box.addEventListener("blur", save);
 }
 
 async function loadDoc(d) {
@@ -221,6 +269,18 @@ async function toggleRow(button) {
   textRow.querySelector("pre").textContent = r.ok ? (await r.json()).text : "This document isn't loaded.";
 }
 
+/* The judge's verdict on a case, as a sentence. */
+function judgeSentence(c) {
+  if (c.given_best == null) return "The judge hasn't rated these documents.";
+  const given = {full: "one of the 5 given documents answers it fully",
+    partial: "one of the 5 given documents answers it partly",
+    none: "none of the 5 given documents answers it"}[c.given_best];
+  const expected = {full: "the expected document answers it fully",
+    partial: "the expected document answers it only partly",
+    none: "even the expected document doesn't answer it"}[c.expected_coverage] ?? "the expected document isn't rated";
+  return `Judge: ${given}; ${expected}.`;
+}
+
 /* Log-scale position of a rank between 1 and the corpus size, as a share of the width. */
 const scale = rank => Math.log10(rank) / Math.log10(CORPUS);
 
@@ -233,7 +293,7 @@ function ruler(m) {
     const x = scale(rank) * W;
     const ty = row === 0 ? 16 : 112;
     return `<line x1="${x}" y1="${y - 14}" x2="${x}" y2="${y + 14}" stroke="var(--accent)" stroke-width="4"/>
-      <text x="${x}" y="${ty}" text-anchor="middle" font-size="21" font-weight="600" fill="var(--accent)">${label} #${fmt(rank)}</text>`;
+      <text x="${x}" y="${ty}" text-anchor="${x < 70 ? "start" : x > W - 70 ? "end" : "middle"}" font-size="21" font-weight="600" fill="var(--accent)">${label} #${fmt(rank)}</text>`;
   };
   return `<div class="ruler">
     <svg viewBox="0 0 ${W} 120" role="img"
@@ -275,10 +335,16 @@ function render(c) {
   const ed = c.expected_doc, m = c.measured, sc = c.small_chunks;
   let html = `<p class="eyebrow">${c.id} · ${esc(c.source)} · ${esc(c.outcome_label)}</p>
     <h2 class="question">${esc(c.question)}</h2>
+    <p class="judge-line">${judgeSentence(c)}</p>
     ${ruler(m)}
     <div class="pair">
       <div><h4>Gold answer</h4><div class="text">${esc(c.gold_answer)}</div></div>
       <div><h4>Pipeline's answer</h4><div class="text">${esc(c.answer)}</div>${judgeBlock(c.judge)}</div>
+    </div>
+    <div class="note">
+      <label for="note">Your note on this case</label>
+      <textarea id="note" rows="4" placeholder="Why did search miss it? What would have found it?">${esc(notes[c.id]?.text)}</textarea>
+      <p id="note-status" class="muted small" aria-live="polite">${notes[c.id] ? "Saved " + esc(notes[c.id].updated.replace("T", " ").slice(0, 16)) : "Saves on its own as you type."}</p>
     </div>`;
 
   if (ed) {
@@ -287,7 +353,7 @@ function render(c) {
       <blockquote>${esc(ed.passage)}</blockquote>${docDetails(ed.doc_id)}`;
   }
 
-  html += `<h3>Documents given to the LLM</h3>`;
+  html += `<h3>The judge on each document</h3><p class="muted small">The 5 documents given to the LLM, then the expected one, each rated on its own without the gold answer.</p>`;
   html += rated.length ? rated.map(docRow).join("") : `<p class="muted">No document was cited, so none was rated. The five it was given are under Not rated at the bottom.</p>`;
 
   if (m) {

@@ -17,12 +17,14 @@ Usage: uv run python exploration/retrieval_failures/cases.py [PORT]
 import importlib
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 from sqlmodel import Session
 
 from train_rag.data_loaders import EnterpriseRagBenchLoader
@@ -36,6 +38,7 @@ from train_rag.repository.question import load_questions
 HERE = Path(__file__).parent
 DATA = HERE / "data"
 PAGE = HERE / "cases.html"
+NOTES = HERE / "review_notes.json"  # your review notes, kept out of the ignored data/
 CITED_RUN = 15
 AGENT_RUN = 14
 OUTCOMES = {
@@ -87,7 +90,16 @@ def outcome(expected: list[str], retrieved: list[str], cited: list[str], ratings
     return "none"
 
 
-def build() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, str]]:
+def best_coverage(coverages: list[str]) -> str | None:
+    """The best of some ratings (full, then partial, then none), or None if none are rated."""
+    for level in ("full", "partial", "none"):
+        if level in coverages:
+            return level
+
+    return None
+
+
+def build() ->tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, str]]:
     """Every wrong answer's summary and details, and the text of every document they show."""
     cases = {row["question_id"]: row for row in read_json("cases_run15.json") or []}
     measured = {row["question_id"]: row for row in read_json("failures_run15.json") or []}
@@ -138,6 +150,12 @@ def build() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, 
             "source": question.source_types[0].value,
             "bm25_rank": target["bm25_rank"] if target else None,
             "gte_rank": target["gte_rank"] if target else None,
+            "given_best": best_coverage(
+                [ratings[d]["coverage"] for d in result.retrieved_doc_ids if d in ratings]
+            ),
+            "expected_coverage": best_coverage(
+                [ratings[d]["coverage"] for d in expected if d in ratings]
+            ),
         }
         summaries.append(summary)
         details[qid] = {
@@ -186,8 +204,46 @@ def doc_name(document: Any) -> str:  # noqa: ANN401
     return f"[{document.source_type}] {document.title.splitlines()[0]}"
 
 
+class Note(BaseModel):
+    """A review note on one case."""
+
+    text: str
+
+
+def load_notes() -> dict[str, dict[str, str]]:
+    """Every saved review note, keyed by question id."""
+    return json.loads(NOTES.read_text()) if NOTES.exists() else {}
+
+
 SUMMARIES, DETAILS, TEXTS = build()
 app = FastAPI()
+
+
+@app.get("/api/notes")
+def notes() -> dict[str, dict[str, str]]:
+    """Every saved review note, for the page to show and mark in the list."""
+    return load_notes()
+
+
+@app.put("/api/note/{qid}")
+def save_note(qid: str, note: Note) -> dict[str, str]:
+    """Save one case's note; an empty note removes it.
+
+    The file is rewritten through a temporary file, so a crash never leaves it half written.
+    """
+    if qid not in DETAILS:
+        raise HTTPException(404, f"no wrong answer {qid}")
+    saved = load_notes()
+    text = note.text.strip()
+    if text:
+        saved[qid] = {"text": text, "updated": datetime.now(UTC).isoformat(timespec="seconds")}
+    else:
+        saved.pop(qid, None)
+    partial = NOTES.with_suffix(".json.tmp")
+    partial.write_text(json.dumps(dict(sorted(saved.items())), indent=1, ensure_ascii=False))
+    partial.replace(NOTES)
+
+    return saved.get(qid, {"text": "", "updated": ""})
 
 
 @app.get("/", response_class=HTMLResponse)

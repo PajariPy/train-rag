@@ -1,0 +1,6 @@
+{
+ "qst_0178": {
+  "text": "Looks like search missed specific detail. It does not have keywords from the query and it is quite complex. kernel stability threshold is named in the query as default pass rate so it is more of a complex embedding case. Probably in this case agent should ask users to be specific or something like that.",
+  "updated": "2026-11-05T04:25:10+00:00"
+ }
+}

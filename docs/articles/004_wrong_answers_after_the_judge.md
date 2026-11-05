@@ -84,8 +84,10 @@ rules call ambiguous through a weak match (`low_similarity`), where by hand they
 | No document cited ("could not find") | 45 |
 
 So 10 wrong answers (8 + 2) are most likely ambiguous questions: the pipeline found a
-document that answers, just not the expected one. The other **46 are real search failures**.
-The rest of this post is about them.
+document that answers, just not the expected one. The other **46 look like real search
+failures**. The rest of this post is about them. (Section 6 rates every document the LLM
+was given, not only the cited ones, and splits these 46 further: 31 search failures and 15
+where a given document did answer.)
 
 ## 3. The 46 real failures, measured
 
@@ -172,13 +174,186 @@ So a new system, `agent-snippets` (`evaluation/agent_snippets.py`), changes the 
 - The cost more than doubled. The median question used about 17k input tokens, the worst
   329k: every turn resends the whole conversation, and some questions took 10 turns.
 
+## 6. The judge on every document, not only the cited ones
+
+Section 2 rated only documents an answer cited, so the 45 "could not find" answers had no
+ratings at all. Here the same judge rates all 5 documents given to the LLM and the expected
+document, for all 57 wrong answers: 324 new ratings, about $0.67
+(`exploration/retrieval_failures/rate_failures.py`).
+
+| The 46 "not found" cases: best rating among the 5 given documents | Cases |
+|---|---:|
+| None of them answers | **31** |
+| One answers partly | 9 |
+| One answers **fully** | **6** |
+
+- **31 are clean search failures:** nothing the LLM got answers the question.
+- **15 are not pure search failures.** A given document answered partly or fully, and the
+  LLM still replied "could not find". The 6 "fully" cases point at the LLM not using what
+  it had, or being too strict.
+- The expected document answers fully in 43 of 46, partly in 2, and not at all in one
+  (qst_0249), which may be a faulty question or gold answer.
+
+The judge's reasoning makes the near-duplicates concrete. For qst_0185 (how to split a
+year-long commitment for about eight accelerators across three regions) it rejects all
+five given documents on one detail each: a fleet of 48 GPUs, of 24 + 12 + 4, of 18 nodes,
+of hundreds of GPUs, or a 3-year term. All five are about the same topic.
+
+## 7. Would the reranker pick the right document? Mostly yes
+
+The reranker only sees the fused top 50. Scoring the expected document as if it were there
+(`analyze.py`, title and first chunk):
+
+| If the expected document were among the candidates | Ranked #1 | In the top 5 |
+|---|---:|---:|
+| Against the pipeline's 5 picks, all 46 problem cases | 17 | **29** |
+| Against the pipeline's 5 picks, the 31 clean failures | 12 | **20** |
+| Against all 50 candidates, all 46 problem cases (section 9 setup) | 12 | 25 |
+
+qst_0185 shows how close it can be: the expected document scores 0.935, above all five
+picks (0.914–0.922), and sits at BM25 #66 and gte #71, just outside both top-50 lists.
+**The reranker is not the weak link; getting the document into its candidates is.**
+
+## 8. What a reranked document costs in time
+
+Measured on the laptop's RTX 2000 Ada (8 GB, half precision, batches of 4), on 10 problem
+questions' real candidate lists:
+
+| Documents reranked | Time per question (mean, range) | Per document |
+|---:|---|---:|
+| 10 | 0.71 s (0.26–1.24) | 71 ms |
+| **50 (today)** | **3.18 s (1.18–4.68)** | 64 ms |
+| 100 | 6.19 s (2.48–9.10) | 63 ms |
+
+Time grows linearly with the number of documents, about 65 ms each, and is driven by input
+length: the reranker reads the title plus the best gte chunk, median about 5,900 characters
+and up to 24,000. Reranking 100 instead of 50 would cost about 3 more seconds per question,
+and would still miss qst_0185 unless each search also returned more than its top 50.
+
+## 9. Shorter reranker inputs: faster, but less precise
+
+All 125 semantic questions, candidates = today's fused top 50 plus the expected document
+when missing, reranked with three inputs (`rerank_window.py`):
+
+| Reranker input | Per document | Per question | Average input |
+|---|---:|---:|---:|
+| Title + best chunk (today) | 65.9 ms | 3.32 s | 6,176 characters |
+| Title + 2,000-character window with the most query words | **14.4 ms** | **0.73 s** | 2,044 characters |
+| Title + first 2,000 characters | 14.4 ms | 0.73 s | 2,045 characters |
+
+| Expected document in the top 5 | Today's chunk | Best window | First 2,000 |
+|---|---:|---:|---:|
+| Already in the top 50 (75 questions) | **68** | 59 | 60 |
+| Added from outside (50 questions) | 30 | **32** | 26 |
+
+- The window is 4.6× faster, but loses 10 of today's top-5 hits (gains 1): the answer is
+  sometimes outside the densest 2,000 characters. That is about 7 points of recall.
+- On the misses it is slightly better, since it cuts noise around the matching words.
+- So a short input doesn't come free; it buys depth. At the same time budget the reranker
+  could read about 230 windows instead of 50 chunks. Whether that depth makes up for the
+  lost precision is still to be measured.
+
+## 10. Embedding experiments: smaller chunks, another model, late chunking
+
+All on the same pools as section 4 (gte's own top 50 plus the expected document, 51
+documents), scored by each document's best chunk. Rank of the expected document, 46 problem
+cases (`pools.py`, `jina_late_chunking.py`):
+
+| | gte 24k (stored) | gte 1k | jina-v3 1k | jina-v3 late chunking 1k | jina-v3 whole document |
+|---|---:|---:|---:|---:|---:|
+| top 1 | 0 | 1 | **3** | 0 | 0 |
+| top 5 | 0 | 1 | **4** | 0 | 0 |
+| top 10 | 0 | 1 | **9** | 3 | 0 |
+| top 20 | 1 | 4 | **18** | 10 | 8 |
+| median rank | 51 | 49 | **26.5** | 32.5 | 33 |
+
+- **Late chunking hurts here:** against plain 1k chunks with the same model it is better in
+  15 cases and worse in 27. Giving each chunk its whole document's context blurs the one
+  detail that tells it apart from its near-duplicates.
+- **A different model with small chunks helps a little** (jina-embeddings-v3, 1k chunks),
+  but the pools are gte's own favourites, the hardest distractors for gte, not for Jina, so
+  part of the gain is the pool. It reaches the top 5 in only 4 of 46.
+- Practical notes: Jina's model code needs transformers 4, so it ran in a separate
+  environment. Without flash-attn, attention memory grows with the square of the length, so
+  late chunking used 12,000-character windows instead of the full 8k tokens. Jina v3 is
+  licensed for non-commercial use.
+
+## 11. An agent that leans on keyword search, with caching
+
+A third agent, `agent-keywords` (`evaluation/agent_keywords.py`): 2 general searches and 10
+keyword searches (snippets with ids), 3 full reads, and instructions to paraphrase when a
+keyword search finds nothing, to check every detail of the question against the document,
+and to collect details from several documents.
+
+To keep the cost down it caches the start of each conversation with Gemini's explicit
+context caching (`evaluation/agent_cache.py`): the instructions, tools and first 5
+documents, and again after each general search. Measured:
+
+| | Result |
+|---|---|
+| Implicit (automatic) caching on our model | none: 3 calls with the same 12,900-token prefix all billed in full |
+| Explicit cache on the same prefix | 12,916 of 12,926 tokens read from the cache |
+| Latency, uncached vs cached call (3 each) | 2.06 s vs 2.24 s mean: no speed-up; creating a cache takes about 1.3 s |
+| Live, qst_0185, first instructions | 5 calls, 62k tokens cached, about $0.05 (uncached about $0.065); answered from a wrong document after 3 of 10 keyword searches |
+| Live, qst_0185, stricter instructions | 9 calls, 7 keyword searches, 155k tokens cached, about $0.13 (uncached about $0.19); replied "could not find" |
+
+Caching saves money, not time. Gemini needs at least one new message after a cache and
+can't switch tools off on a cached call, so the question goes after the cached documents,
+and the last turn after the budget is spent goes uncached. The agent kept putting quotes in
+its keyword queries despite the instructions; they are ignored by BM25 and are better
+stripped in code. Cached input is priced as an assumption (10% of input), not yet checked
+for this model.
+
+## 12. Ideas costed, not yet tried
+
+| Idea | LLM cost | Local load |
+|---|---|---|
+| Gemini writes 10 questions per document, index them | about $1,250 (about $600 in batch mode), thinking off | 5.1M questions to embed, about 8–16 GB |
+| Gemini labels 10k documents with key facts, LoRA on a 1–2B model, local extraction | about $27 | 5–10 h training (fits in 8 GB; 3–4B needs QLoRA), then about 2 days of GPU |
+| Same, but one vector of all facts per document | same | 512k vectors, about 1.5 GB |
+
+Before any of these, a pilot on the 2,370 pool documents (about $6) would compare: all facts
+as one vector, one vector per fact, groups of facts, and BM25 over fact text.
+
+## 13. The pipeline on the whole benchmark
+
+The pipeline (hybrid-rerank) on all 500 questions: basic (run 7) and semantic (run 17)
+from before, and the 8 other types run now (runs 19–26, about $2.09).
+
+| Question type | Questions | Correct | Complete | Doc recall |
+|---|---:|---:|---:|---:|
+| high_level | 10 | 40.0% | 43.2% | — |
+| semantic | 125 | 52.8% | 51.7% | 55.2% |
+| completeness | 20 | 55.0% | 47.8% | 40.6% |
+| project_related | 40 | 65.0% | 53.7% | 54.5% |
+| constrained | 30 | 80.0% | 91.2% | 90.0% |
+| basic | 175 | 86.3% | — | 88.6% |
+| conflicting_info | 20 | 90.0% | 86.3% | 87.5% |
+| intra_document_reasoning | 40 | 92.5% | 91.7% | 100.0% |
+| info_not_found | 20 | 100.0% | 100.0% | — |
+| miscellaneous | 20 | 100.0% | 99.0% | 100.0% |
+| **All** | **500** | **≈ 75.4%** | | **≈ 76.3%** |
+
+(— : these questions have no expected documents. Totals are weighted by questions.)
+
+- Where the right document is easy to find, the pipeline is strong: 90–100%.
+- The four weak types are all about finding documents: completeness and project_related
+  need several documents and the top 5 holds only some; semantic is the near-duplicate
+  problem; high_level asks for an overview across many documents.
+- These four are 185 of the 500 questions, so a better first stage, or an agent that keeps
+  searching until it has every piece, matters well beyond the semantic questions.
+
 ## What I take from it
 
-- **Ambiguity explains 10 of 57 wrong answers.** The other 46 are documents search can't
-  find.
-- **Text fixes, chunk size and a better reranker won't fix them.** The corpus is full of
-  same-topic, near-duplicate documents. Wording alone can't tell them apart: the right
-  document and 50 others look equally relevant to every text-based scorer.
+- **Of 57 wrong answers, 10 are ambiguous questions, 15 are the LLM not using a document
+  that answered, and 31 are documents search can't find.**
+- **Text fixes, chunk size, late chunking and a different embedding model won't fix them.**
+  The corpus is full of same-topic, near-duplicate documents. Wording alone can't tell
+  them apart: the right document and 50 others look equally relevant to every text-based
+  scorer.
+- **The reranker can tell them apart** (it would put the expected document in the top 5 in
+  29 of 46 cases), but it only sees the top 50, and reranking more costs about 65 ms per
+  document.
 - **What differs is structure:** the project, the customer, the people, the channel, the
   time. The next step is an index of those, so the agent can narrow the search down before
   ranking by text. An LLM over all 512k documents costs too much, so it has to come mostly from
@@ -193,6 +368,9 @@ So a new system, `agent-snippets` (`evaluation/agent_snippets.py`), changes the 
 - The judge itself was checked on only 11 hand labels.
 
 - Run 18 is a single run; LLM answers vary by a couple of questions between runs (section 1).
+- The embedding tests (sections 4 and 10) use pools picked by gte, which favours any other
+  scorer; the reranker and window tests use today's indexes.
+- Latency numbers are from one laptop GPU and a handful of calls.
 
-Spend for this part: run 17 cost about $1.05, the judge ratings about $0.15, run 18 about
-$7.17.
+Spend for this part: run 17 about $1.05, the judge ratings about $0.15 and $0.67, run 18
+about $7.17, the keyword agent's live checks and caching probes about $0.25.
