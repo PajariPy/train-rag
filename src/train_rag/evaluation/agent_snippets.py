@@ -48,6 +48,7 @@ class SnippetAgentSystem(AgentSystem):
         max_searches: int = MAX_SEARCHES,
         max_reads: int = MAX_READS,
         keyword_results: int = KEYWORD_RESULTS,
+        cache: bool = False,
     ) -> None:
         """Set up the agent.
 
@@ -59,8 +60,9 @@ class SnippetAgentSystem(AgentSystem):
             max_searches: Searches allowed per question, counting the first one.
             max_reads: Documents the agent may read in full per question.
             keyword_results: Documents the keyword search shows as snippets.
+            cache: Cache the conversation's start with Gemini.
         """
-        super().__init__(knowledge_base, client, usage, top_k, max_searches)
+        super().__init__(knowledge_base, client, usage, top_k, max_searches, cache)
         self.reader = knowledge_base
         self.max_reads = max_reads
         self.keyword_results = keyword_results
@@ -112,9 +114,22 @@ class SnippetAgentSystem(AgentSystem):
         if budget.searches >= self.max_searches:
             return super().run_tool(tool, arguments, question, budget)  # the limit error
         budget.searches += 1
-        query = str(arguments.get("query") or question)
+
+        return self.keyword_snippets(str(arguments.get("query") or question))
+
+    def keyword_snippets(self, query: str) -> tuple[dict[str, str], list[SearchHit]]:
+        """Search by keywords and show each result as its matching lines.
+
+        Args:
+            query: The keywords.
+
+        Returns:
+            The snippets as the model sees them, and the documents they come from.
+        """
         found = self.knowledge_base.retrieve_keywords(query, self.keyword_results)
         texts = self.reader.read_documents([hit.doc_id for hit in found])
+        if not texts:
+            return {"results": "No document contains these words. Try other words."}, []
 
         return {"results": snippet_context(texts, query)}, texts
 

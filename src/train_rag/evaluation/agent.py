@@ -6,6 +6,7 @@ from typing import ClassVar, Protocol
 from google import genai
 from google.genai import types
 
+from train_rag.evaluation.agent_cache import ConversationCache
 from train_rag.evaluation.agent_tools import (
     KEYWORD_TOOL,
     SEARCH_TOOL,
@@ -38,10 +39,14 @@ class KnowledgeBase(Protocol):
 
 @dataclass
 class Budget:
-    """What one question has used so far: searches (counting the first) and full reads."""
+    """What one question has used so far: searches (counting the first) and full reads.
+
+    `keyword_searches` is counted only by agents that budget keyword searches apart.
+    """
 
     searches: int = 1
     reads: int = 0
+    keyword_searches: int = 0
 
 
 class AgentSystem(RagSystem):
@@ -65,6 +70,7 @@ class AgentSystem(RagSystem):
         usage: UsageMeter,
         top_k: int = 5,
         max_searches: int = MAX_SEARCHES,
+        cache: bool = False,
     ) -> None:
         """Set up the agent.
 
@@ -74,7 +80,10 @@ class AgentSystem(RagSystem):
             usage: Counts the tokens and searches.
             top_k: Documents each search returns.
             max_searches: Searches allowed per question, counting the first one.
+            cache: Cache the conversation's start with Gemini (`ConversationCache`):
+                the first search's documents, and again after each general search.
         """
+        self.cache = cache
         self.knowledge_base = knowledge_base
         self.client = client
         self.usage = usage
@@ -105,6 +114,23 @@ class AgentSystem(RagSystem):
             tool_config=types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(mode=mode)
             ),
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            thinking_config=types.ThinkingConfig(
+                thinking_level=types.ThinkingLevel.LOW, include_thoughts=True
+            ),
+        )
+
+    def cached_config(self, cache_name: str) -> types.GenerateContentConfig:
+        """Configure one turn that reads its start, instructions and tools from a cache.
+
+        Args:
+            cache_name: The Gemini cache.
+
+        Returns:
+            The turn's settings; tools stay in automatic mode, as the cache fixes them.
+        """
+        return types.GenerateContentConfig(
+            cached_content=cache_name,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             thinking_config=types.ThinkingConfig(
                 thinking_level=types.ThinkingLevel.LOW, include_thoughts=True
@@ -185,39 +211,63 @@ class AgentSystem(RagSystem):
         found = [hit.doc_id for hit in hits]
         budget = Budget()
         documents = documents_context(hits)
-        first_turn = prompt("agent_first_turn", question=question, documents=documents)
+        if self.cache:
+            # The documents first and the question after them, so the documents can be
+            # cached and every turn still has something new to send.
+            turns = [
+                prompt("agent_documents_turn", documents=documents),
+                prompt("agent_question_turn", question=question),
+            ]
+        else:
+            turns = [prompt("agent_first_turn", question=question, documents=documents)]
         trace = [
             TraceStep(kind="instructions", text=self.instructions),
             tool_step(SEARCH_TOOL, {"query": question, "automatic": True}, hits, documents),
-            TraceStep(kind="input", text=first_turn),
+            TraceStep(kind="input", text="\n\n".join(turns)),
         ]
-        contents = [types.Content(role="user", parts=[types.Part.from_text(text=first_turn)])]
-        while True:
-            response = self.client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=contents,
-                config=self.config(can_search=self.can_call(budget)),
-            )
-            self.usage.add(response)
-            trace.append(model_step(response))
-            calls = response.function_calls or []
-            candidate = response.candidates[0].content if response.candidates else None
-            if not calls or candidate is None:
-                self.usage.add_searches(budget.searches)
-                return SystemAnswer(
-                    answer=trace[-1].text.strip() or NOT_FOUND_ANSWER,
-                    retrieved_doc_ids=list(dict.fromkeys(found)),
-                    trace=trace,
+        contents = [types.Content(role="user", parts=[types.Part.from_text(text=t)]) for t in turns]
+        cache = ConversationCache(self.client, self.usage)
+        if self.cache:
+            cache.store(self.instructions, self.tools(), contents[:1])
+        pending = 0  # cache up to here once a later turn exists (after a general search)
+        try:
+            while True:
+                if pending and len(contents) > pending:
+                    cache.store(self.instructions, self.tools(), contents[:pending])
+                    pending = 0
+                can_call = self.can_call(budget)
+                if cache.name and can_call:
+                    contents_sent = contents[cache.covered :]
+                    config = self.cached_config(cache.name)
+                else:
+                    contents_sent, config = contents, self.config(can_search=can_call)
+                response = self.client.models.generate_content(
+                    model=GEMINI_MODEL, contents=contents_sent, config=config
                 )
+                self.usage.add(response)
+                trace.append(model_step(response))
+                calls = response.function_calls or []
+                candidate = response.candidates[0].content if response.candidates else None
+                if not calls or candidate is None:
+                    self.usage.add_searches(budget.searches + budget.keyword_searches)
+                    return SystemAnswer(
+                        answer=trace[-1].text.strip() or NOT_FOUND_ANSWER,
+                        retrieved_doc_ids=list(dict.fromkeys(found)),
+                        trace=trace,
+                    )
 
-            # Keep the model's turn as is: it carries the thought signatures Gemini needs.
-            contents.append(candidate)
-            results = []
-            for call in calls:
-                tool = call.name or SEARCH_TOOL
-                arguments = dict(call.args or {})
-                output, hits = self.run_tool(tool, arguments, question, budget)
-                found.extend(hit.doc_id for hit in hits)
-                trace.append(tool_step(tool, arguments, hits, next(iter(output.values()))))
-                results.append(types.Part.from_function_response(name=tool, response=output))
-            contents.append(types.Content(role="user", parts=results))
+                # Keep the model's turn as is: it carries the thought signatures Gemini needs.
+                contents.append(candidate)
+                results = []
+                for call in calls:
+                    tool = call.name or SEARCH_TOOL
+                    arguments = dict(call.args or {})
+                    output, hits = self.run_tool(tool, arguments, question, budget)
+                    found.extend(hit.doc_id for hit in hits)
+                    trace.append(tool_step(tool, arguments, hits, next(iter(output.values()))))
+                    results.append(types.Part.from_function_response(name=tool, response=output))
+                    if self.cache and tool == SEARCH_TOOL and hits:
+                        pending = len(contents) + 1
+                contents.append(types.Content(role="user", parts=results))
+        finally:
+            cache.close()

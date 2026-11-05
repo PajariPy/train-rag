@@ -7,6 +7,7 @@ from google import genai
 from train_rag.database import get_engine
 from train_rag.embedder import GteModernBertEmbedder, MiniLmEmbedder
 from train_rag.evaluation.agent import AgentSystem
+from train_rag.evaluation.agent_keywords import KeywordAgentSystem
 from train_rag.evaluation.agent_snippets import SnippetAgentSystem
 from train_rag.evaluation.hybrid import PipelineRetriever
 from train_rag.evaluation.judge import AnswerJudge, GeminiJudge
@@ -39,6 +40,9 @@ SYSTEMS: dict[str, SystemFactory] = {
         PipelineRetriever(RetrievalPipeline.load()), genai.Client(), USAGE
     ),
     SnippetAgentSystem.name: lambda _questions: SnippetAgentSystem(
+        PipelineRetriever(RetrievalPipeline.load()), genai.Client(), USAGE
+    ),
+    KeywordAgentSystem.name: lambda _questions: KeywordAgentSystem(
         PipelineRetriever(RetrievalPipeline.load()), genai.Client(), USAGE
     ),
 }
