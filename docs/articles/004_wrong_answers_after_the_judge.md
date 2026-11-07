@@ -291,7 +291,7 @@ documents, and again after each general search. Measured:
 
 | | Result |
 |---|---|
-| Implicit (automatic) caching on our model | none: 3 calls with the same 12,900-token prefix all billed in full |
+| Implicit (automatic) caching on our model | none in a bare 3-call test with the same 12,900-token prefix, but it does happen in real agent conversations (section 13) |
 | Explicit cache on the same prefix | 12,916 of 12,926 tokens read from the cache |
 | Latency, uncached vs cached call (3 each) | 2.06 s vs 2.24 s mean: no speed-up; creating a cache takes about 1.3 s |
 | Live, qst_0185, first instructions | 5 calls, 62k tokens cached, about $0.05 (uncached about $0.065); answered from a wrong document after 3 of 10 keyword searches |
@@ -342,6 +342,25 @@ from before, and the 8 other types run now (runs 19–26, about $2.09).
   problem; high_level asks for an overview across many documents.
 - These four are 185 of the 500 questions, so a better first stage, or an agent that keeps
   searching until it has every piece, matters well beyond the semantic questions.
+
+**The snippet agent on completeness** (run 27, about $0.52), the type that needs several
+documents:
+
+| Completeness, 20 questions | Pipeline (run 23) | Snippet agent (run 27) |
+|---|---:|---:|
+| Correct | 55.0% | **70.0%** |
+| Complete | 47.8% | **72.7%** |
+| Document recall | 40.6% | **64.1%** |
+
+4 answers newly right, 1 newly wrong; recall up 24 points, as the extra searches find the
+second and third documents. One question (qst_0439) first failed in the judge with a
+`503 UNAVAILABLE` and was rerun on its own (wrong, completeness 0.4, about $0.06).
+
+The run also reported 628,252 cached input tokens with no cache written: Gemini's implicit
+caching does work in real agent conversations, unlike the bare 3-call test in section 11.
+So run 18's $7.17 was likely an overestimate (the meter then priced all input in full), and
+the explicit cache saves less than estimated there. The cost above prices implicit hits at
+the assumed cached rate.
 
 ## What I take from it
 
