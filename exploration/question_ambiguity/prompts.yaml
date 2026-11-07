@@ -1,0 +1,52 @@
+document_answer_instructions: |
+  You read one internal company document and answer a question from that document alone.
+  Do not use outside knowledge and do not guess what other documents might say.
+
+  First, in reasoning, explain in two to four sentences what the question asks for, what
+  the document is about, and whether and where the document gives that. Say plainly when
+  the document is about the same topic but a different case, customer, product or event.
+
+  Then set coverage:
+  - full: the document gives everything the question asks for;
+  - partial: the document gives part of it, or gives a close version of it (for example the
+    same event or setting with a detail missing or different), so a reader could build a
+    plausible answer from it;
+  - none: the document doesn't give what the question asks for, or it is about a case that
+    contradicts a specific detail the question states (a date, customer, product, version,
+    region or name), since the question then rules it out.
+
+  For full and partial, give the answer the document supports in at most three sentences,
+  and copy into quote the one passage of the document the answer rests on, word for word,
+  at most 300 characters. For none, leave answer and quote empty.
+
+document_answer_prompt: |
+  Question:
+  {question}
+
+  Document ({source}: {name}):
+  {text}
+
+# Which of the documents a system was given its answer came from, for answers recorded
+# before the pipeline cited its documents (notebook 006, stage 2).
+citation_instructions: |
+  A question-answering system was given a question and numbered internal company
+  documents, and wrote an answer. Say which documents the answer was taken from.
+
+  First, in reasoning, explain in one to three sentences which documents state the
+  answer's claims (its names, numbers, dates and events), and which don't.
+
+  Then list in cited_documents the numbers of the documents the answer was taken from,
+  best source first: only documents that state at least one of its specific claims.
+  Leave it empty when the answer says the information isn't available, or when no
+  document states its claims.
+
+citation_prompt: |
+  Question:
+  {question}
+
+  The system's answer:
+  {answer}
+
+  Documents the system was given:
+
+  {documents}

@@ -1,0 +1,87 @@
+{
+ "qst_0109": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T11:48:04+00:00",
+  "note": ""
+ },
+ "qst_0145": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T11:28:54+00:00",
+  "note": "The expected is about Japan, but not concrete about it. But there are a lot of hits, so I mark this as not ambiguious"
+ },
+ "qst_0154": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T11:45:46+00:00",
+  "note": ""
+ },
+ "qst_0165": {
+  "label": "ambiguous",
+  "labelled_at": "2026-11-03T11:46:25+00:00",
+  "note": ""
+ },
+ "qst_0234": {
+  "label": "ambiguous",
+  "labelled_at": "2026-11-03T11:49:55+00:00",
+  "note": ""
+ },
+ "qst_0238": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T10:32:36+00:00",
+  "note": ""
+ },
+ "qst_0245": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T11:14:13+00:00",
+  "note": ""
+ },
+ "qst_0272": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T11:48:39+00:00",
+  "note": ""
+ },
+ "qst_0305": {
+  "label": "ambiguous",
+  "labelled_at": "2026-11-03T11:21:13+00:00",
+  "note": ""
+ },
+ "qst_0319": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T12:18:02+00:00",
+  "note": ""
+ },
+ "qst_0353": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T10:30:32+00:00",
+  "note": ""
+ },
+ "qst_0399": {
+  "label": "unsure",
+  "labelled_at": "2026-11-03T12:14:31+00:00",
+  "note": ""
+ },
+ "qst_0409": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T10:35:17+00:00",
+  "note": "but im not sure"
+ },
+ "qst_0434": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T10:38:28+00:00",
+  "note": ""
+ },
+ "qst_0440": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T10:42:42+00:00",
+  "note": ""
+ },
+ "qst_0464": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T11:52:28+00:00",
+  "note": ""
+ },
+ "qst_0500": {
+  "label": "not ambiguous",
+  "labelled_at": "2026-11-03T10:30:47+00:00",
+  "note": ""
+ }
+}

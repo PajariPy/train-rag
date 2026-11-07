@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run progress</title>
+<link rel="icon" id="favicon" href="data:,">
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e4e4df;
+    --bar: #2f6fdf; --track: #e9ecf3; --ok: #2e8b57; --warn: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151515; --card: #1f1f1f; --ink: #ececea; --muted: #9a9a94; --line: #2e2e2e;
+      --bar: #5b8ff0; --track: #2a2f3a; --ok: #5cc28c; --warn: #ef7a6d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 720px; margin: 48px auto; padding: 0 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 28px;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; font-weight: 600; }
+  .stage { color: var(--muted); margin: 0 0 24px; }
+  .status {
+    display: inline-block; font-size: 13px; padding: 2px 10px; border-radius: 999px;
+    border: 1px solid currentColor; margin-left: 8px; vertical-align: 2px;
+  }
+  .running { color: var(--bar); } .finished { color: var(--ok); } .stopped { color: var(--warn); }
+  .track { height: 14px; background: var(--track); border-radius: 7px; overflow: hidden; }
+  .fill {
+    height: 100%; width: 0; background: var(--bar); border-radius: 7px; transition: width .6s;
+  }
+  .fill.live {
+    background-image: linear-gradient(
+      -45deg, rgba(255,255,255,.22) 25%, transparent 25%, transparent 50%,
+      rgba(255,255,255,.22) 50%, rgba(255,255,255,.22) 75%, transparent 75%);
+    background-size: 28px 28px; animation: move 1s linear infinite;
+  }
+  .fill.finished { background: var(--ok); } .fill.stopped { background: var(--warn); }
+  @keyframes move { from { background-position: 0 0; } to { background-position: 28px 0; } }
+  @media (prefers-reduced-motion: reduce) { .fill.live { animation: none; } }
+  .note { color: var(--muted); font-size: 14px; margin: -8px 0 20px; min-height: 1.5em; }
+  .percent { font-size: 40px; font-weight: 650; margin: 16px 0 20px; font-variant-numeric: tabular-nums; }
+  dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; margin: 0; }
+  dt { color: var(--muted); font-size: 13px; }
+  dd { margin: 2px 0 0; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .updated { color: var(--muted); font-size: 13px; margin-top: 24px; }
+  @media (max-width: 480px) { dl { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="card" id="card">
+    <h1 id="pipeline">Waiting for a run…</h1>
+    <p class="stage" id="stage">Start one with <code>uv run train-rag ingest</code> or <code>evaluate</code>.</p>
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <div class="percent" id="percent">–</div>
+    <p class="note" id="note"></p>
+    <dl>
+      <div><dt id="unit">Items</dt><dd id="items">–</dd></div>
+      <div id="data-cell"><dt>Data left</dt><dd id="data">–</dd></div>
+      <div><dt>Time elapsed</dt><dd id="elapsed">–</dd></div>
+      <div><dt>Time left</dt><dd id="left">–</dd></div>
+    </dl>
+    <p class="updated" id="updated"></p>
+  </div>
+</main>
+<script>
+  // Pages at 14 pt: the corpus averages about 1,700 characters per printed page.
+  const CHARS_PER_PAGE = 1700;
+  const POLL_MS = 2000;
+  const COLORS = { running: "#2f6fdf", finished: "#2e8b57", stopped: "#c0392b" };
+
+  let run = null;      // last state from the server
+  let fetchedAt = 0;   // when it arrived, to tick the clocks between polls
+  let offline = false;
+
+  const number = (value) => Math.round(value).toLocaleString("en-US");
+  const duration = (seconds) => {
+    if (seconds === null || !isFinite(seconds)) return "estimating…";
+    const total = Math.max(0, Math.round(seconds));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (hours) return `${hours} h ${minutes} min`;
+    return minutes ? `${minutes} min ${secs} s` : `${secs} s`;
+  };
+  const set = (id, text) => { document.getElementById(id).textContent = text; };
+
+  // Favicon: a ring that fills with the progress, in the colour of the run's status.
+  function drawFavicon(share, status) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 64;
+    const context = canvas.getContext("2d");
+    context.lineWidth = 12;
+    context.strokeStyle = "rgba(128, 128, 128, 0.3)";
+    context.beginPath();
+    context.arc(32, 32, 24, 0, 2 * Math.PI);
+    context.stroke();
+    context.strokeStyle = COLORS[status] || COLORS.running;
+    context.lineCap = "round";
+    context.beginPath();
+    context.arc(32, 32, 24, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.max(share, 0.02));
+    context.stroke();
+    document.getElementById("favicon").href = canvas.toDataURL("image/png");
+  }
+
+  function render() {
+    if (!run) return;
+    const since = (Date.now() - fetchedAt) / 1000;
+    const running = run.status === "running";
+    const byChars = run.total_chars > 0;
+    const share = byChars ? run.done_chars / run.total_chars
+      : run.total_items ? run.done_items / run.total_items : 1;
+    const charsLeft = run.total_chars - run.done_chars;
+    const indexing = running && run.stage.includes("index");
+
+    document.title = `${Math.floor(share * 100)}% · ${run.status} · ${run.pipeline}`;
+    set("pipeline", run.pipeline);
+    const badge = document.createElement("span");
+    badge.className = `status ${run.status}`;
+    badge.textContent = run.status;
+    document.getElementById("pipeline").append(badge);
+    set("stage", running ? `Working on: ${run.stage}` : `Last step: ${run.stage}`);
+
+    const fill = document.getElementById("fill");
+    fill.style.width = `${share * 100}%`;
+    fill.className = `fill ${running ? "live" : run.status}`;
+    set("percent", `${(share * 100).toFixed(1)}%`);
+    set("note", indexing
+      ? "Building the vector index for this source: the bar moves on when it's done."
+      : offline ? "Can't reach the progress server; showing the last known state."
+      : run.note);
+
+    set("unit", run.unit.charAt(0).toUpperCase() + run.unit.slice(1));
+    set("items", `${number(run.done_items)} / ${number(run.total_items)}`);
+    document.getElementById("data-cell").hidden = !byChars;
+    set("data", `${number(charsLeft / 1e6)}M chars · ≈${number(charsLeft / CHARS_PER_PAGE)} pages`);
+    set("elapsed", duration(run.seconds_elapsed + (running ? since : 0)));
+    set("left", run.status === "stopped" ? "stopped"
+      : run.seconds_left === null ? "estimating…"
+      : duration(run.seconds_left - (running ? since : 0)));
+    const ago = (Date.now() - new Date(run.updated_at).getTime()) / 1000;
+    set("updated", `Last update from the pipeline ${duration(ago)} ago · live`);
+    drawFavicon(share, run.status);
+  }
+
+  async function poll() {
+    try {
+      const state = await (await fetch("/api/progress", { cache: "no-store" })).json();
+      offline = false;
+      if (state) { run = state; fetchedAt = Date.now(); }
+    } catch {
+      offline = true;
+    }
+    render();
+  }
+
+  drawFavicon(0, "running");
+  poll();
+  setInterval(poll, POLL_MS);
+  setInterval(render, 1000);
+</script>
+</body>
+</html>
