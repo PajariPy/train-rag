@@ -4,8 +4,15 @@ import asyncio
 import threading
 from typing import ClassVar
 
+from sqlmodel import Session
+
+from train_rag.data_loaders import EnterpriseRagBenchLoader
+from train_rag.database import get_engine
+from train_rag.models import SourceType
 from train_rag.models.retrieval import RetrievedDocument, SearchHit
 from train_rag.pipelines.retrieval import RetrievalPipeline
+from train_rag.processing.normalize import normalize_content
+from train_rag.repository.document import ids_of_doc_ids, load_documents
 from train_rag.retrieval import Retriever
 
 
@@ -27,6 +34,32 @@ class PipelineRetriever(Retriever):
         self.pipeline = pipeline
         self.loop = asyncio.new_event_loop()
         threading.Thread(target=self.loop.run_forever, daemon=True).start()
+
+    def read_documents(self, doc_ids: list[str]) -> list[SearchHit]:
+        """Load documents' full normalized text, with the title on top.
+
+        Args:
+            doc_ids: Dataset ids.
+
+        Returns:
+            One hit per known id, in the order asked; unknown ids are left out.
+        """
+        with Session(get_engine()) as session:
+            ids = ids_of_doc_ids(session, EnterpriseRagBenchLoader.name, doc_ids)
+            loaded = {doc.doc_id: doc for doc in load_documents(session, sorted(ids))}
+
+        return [
+            SearchHit(
+                doc_id=doc_id,
+                document_id=loaded[doc_id].id or 0,
+                source_type=SourceType(loaded[doc_id].source_type),
+                field="document",
+                text=f"{loaded[doc_id].title}\n\n{normalize_content(loaded[doc_id].content)}",
+                distance=0.0,
+            )
+            for doc_id in dict.fromkeys(doc_ids)
+            if doc_id in loaded
+        ]
 
     def searchable_doc_ids(self) -> set[str]:
         """List the documents BM25 indexed, which is every document of the corpus.

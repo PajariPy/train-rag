@@ -88,6 +88,9 @@ def _(mo):
     - `candidates.py` writes `data/candidates.json`: the fused top 50 of every semantic
       question.
 
+    Stage 2 runs the first two again on every wrong answer of the cited run, into
+    `data/cases_run15.json` and `data/failures_run15.json`.
+
     Each takes the output path as its first argument; the first two also take question ids.
     `exploration/retrieval_failures/answer_passages.yaml` holds the passage of each expected
     document that contains the answer.
@@ -641,22 +644,9 @@ def document_texts(
     return document_name, document_view, load_by_doc_id
 
 
-@app.cell
-def _(
-    DOCUMENTS_FILE,
-    agent_results,
-    case_picker,
-    cases,
-    document_name,
-    document_view,
-    excerpts,
-    failures,
-    load_by_doc_id,
-    mo,
-    pipeline_results,
-    questions,
-):
-    def _judge(result, facts):
+@app.cell(hide_code=True)
+def case_helpers(document_name, document_view, load_by_doc_id, mo):
+    def judge_view(result, facts):
         """The judge's verdict, its reasoning and which gold facts the answer covered."""
         if result is None:
             return "*Not judged.*"
@@ -671,12 +661,74 @@ def _(
             f"Gold facts covered:\n\n{_covered}"
         )
 
-    def _ranks(ranks):
-        return ", ".join(f"{_name} #{_rank}" for _name, _rank in sorted(ranks.items()))
 
-    def _quote(passage):
+    def quote(passage):
+        """A passage as a markdown block quote."""
         return "\n".join(f"> {_line}" if _line else ">" for _line in passage.splitlines())
 
+
+    def picks_table(picked):
+        """The pipeline's picks: rank in each search, BM25 score, gte similarity, reranker."""
+        _rows = "\n".join(
+            f"| {_i} | {_p['source']} | {_p['title'][:90]} | "
+            + ", ".join(f"{_name} #{_rank}" for _name, _rank in sorted(_p["ranks"].items()))
+            + f" | {_p['bm25_score']:.1f} | {_p['gte_similarity']:.3f} | {_p['rerank_score']:.3f} |"
+            for _i, _p in enumerate(picked, 1)
+        )
+
+        return (
+            "| # | Type | Name | Rank in each search | BM25 score | gte similarity | Reranker |\n"
+            "|---:|---|---|---|---:|---:|---:|\n" + _rows
+        )
+
+
+    def agent_search_views(searches, expected_ids):
+        """The agent's own searches, each with its documents to open; ✅ marks an expected one."""
+        _found = load_by_doc_id(
+            [_d["doc_id"] for _search in searches for _d in _search["documents"]]
+        )
+        _views = []
+        for _search in searches:
+            _tool = "keyword" if _search["tool"] == "keyword_search" else "search"
+            if _search["refused"]:
+                _views.append(mo.md(f"- {_tool} `{_search['query']}`: refused, search limit reached"))
+                continue
+            _items = {}
+            for _i, _d in enumerate(_search["documents"], 1):
+                _mark = " ✅" if _d["doc_id"] in expected_ids else ""
+                _doc = _found[_d["doc_id"]]
+                _label = f"{_i}. {document_name(_doc)} ({len(_doc.content):,} characters){_mark}"
+                _items[_label] = document_view(_doc)
+            _views.append(mo.md(f"- {_tool} `{_search['query']}`:"))
+            _views.append(mo.accordion(_items, multiple=True))
+        if not _views:
+            _views.append(mo.md("None: it answered from the first search."))
+
+        return _views
+
+
+    return agent_search_views, judge_view, picks_table, quote
+
+
+@app.cell
+def _(
+    DOCUMENTS_FILE,
+    agent_results,
+    agent_search_views,
+    case_picker,
+    cases,
+    document_name,
+    document_view,
+    excerpts,
+    failures,
+    judge_view,
+    load_by_doc_id,
+    mo,
+    picks_table,
+    pipeline_results,
+    questions,
+    quote,
+):
     _qid = case_picker.value
     _case = cases[_qid]
     _record = next(_r for _r in failures if _r["question_id"] == _qid)
@@ -685,52 +737,26 @@ def _(
     _expected = _record["expected"][0]
     _source = load_by_doc_id([_document["doc_id"]])[_document["doc_id"]]
 
-    _picks = "\n".join(
-        f"| {_i} | {_p['source']} | {_p['title'][:90]} | {_ranks(_p['ranks'])} "
-        f"| {_p['bm25_score']:.1f} | {_p['gte_similarity']:.3f} | {_p['rerank_score']:.3f} |"
-        for _i, _p in enumerate(_record["picked"], 1)
-    )
-    _found = load_by_doc_id(
-        [_d["doc_id"] for _search in _case["agent_searches"] for _d in _search["documents"]]
-    )
-    _agent = []
-    for _search in _case["agent_searches"]:
-        _tool = "keyword" if _search["tool"] == "keyword_search" else "search"
-        if _search["refused"]:
-            _agent.append(mo.md(f"- {_tool} `{_search['query']}`: refused, search limit reached"))
-            continue
-        _items = {}
-        for _i, _d in enumerate(_search["documents"], 1):
-            _mark = " ✅" if _d["doc_id"] == _document["doc_id"] else ""
-            _doc = _found[_d["doc_id"]]
-            _label = f"{_i}. {document_name(_doc)} ({len(_doc.content):,} characters){_mark}"
-            _items[_label] = document_view(_doc)
-        _agent.append(mo.md(f"- {_tool} `{_search['query']}`:"))
-        _agent.append(mo.accordion(_items, multiple=True))
-    if not _agent:
-        _agent.append(mo.md("None: it answered from the first search."))
-
     _text = "\n\n".join(
         [
             f"### {_qid}: {document_name(_source)}",
             f"**Query:** {_case['question']}",
             f"**Expected answer:** {_case['gold_answer']}",
             f"**Pipeline answer (run 8):** {_case['pipeline_answer']}",
-            _judge(pipeline_results.get(_qid), questions[_qid].answer_facts),
+            judge_view(pipeline_results.get(_qid), questions[_qid].answer_facts),
             f"**Source document:** `{_document['doc_id']}`, {_document['chars']:,} characters, "
             f"row {_document['row_index']:,} of `{DOCUMENTS_FILE}`. Scores: BM25 "
             f"#{_expected['bm25_rank']:,} ({_expected['bm25_score']:.1f} of a top "
             f"{_record['top_bm25_score']:.1f}), gte #{_expected['gte_rank']:,} "
             f"({_expected['gte_similarity']:.3f}), reranker {_expected['rerank_score']:.3f}. "
             "The passage that holds the answer:",
-            _quote(_excerpt),
+            quote(_excerpt),
         ]
     )
     _rest2 = "\n\n".join(
         [
             "**Pipeline's top 5:**",
-            "| # | Type | Name | Rank in each search | BM25 score | gte similarity | Reranker |\n"
-            "|---:|---|---|---|---:|---:|---:|\n" + _picks,
+            picks_table(_record["picked"]),
             "**Agent's own searches** (run 14), ✅ marks the expected document; open one "
             "to read it:",
         ]
@@ -750,13 +776,13 @@ def _(
                 }
             ),
             mo.md(_rest2),
-            *_agent,
+            *agent_search_views(_case["agent_searches"], {_document["doc_id"]}),
             mo.accordion(
                 {
                     "Agent answer (run 14) and its judge": mo.md(
                         (_case["agent_answer"] or "")
                         + "\n\n"
-                        + _judge(agent_results.get(_qid), questions[_qid].answer_facts)
+                        + judge_view(agent_results.get(_qid), questions[_qid].answer_facts)
                     ),
                 }
             ),
@@ -986,6 +1012,47 @@ def stage2_outcomes(citations, doc_ratings, questions, wrong_results):
     return PIE, stage2
 
 
+@app.cell(hide_code=True)
+def stage2_details(FAILURES, json):
+    # Case texts and ranks for every wrong answer of the cited run, written by
+    # case_texts.py and analyze.py into these two files (ranks appear once analyze.py ran).
+    stage2_cases = {
+        _case["question_id"]: _case
+        for _case in json.loads((FAILURES / "data" / "cases_run15.json").read_text())
+    }
+    _ranks_file = FAILURES / "data" / "failures_run15.json"
+    stage2_failures = (
+        {_record["question_id"]: _record for _record in json.loads(_ranks_file.read_text())}
+        if _ranks_file.exists()
+        else {}
+    )
+
+
+    def positions(qid):
+        """Where the expected document ranks in BM25 and in gte, over the whole corpus."""
+        _record = stage2_failures.get(qid)
+        if not _record or not _record["expected"]:
+            return "positions not measured"
+        _e = _record["expected"][0]
+
+        return f"BM25 #{_e['bm25_rank']:,} · gte #{_e['gte_rank']:,}"
+
+
+    def rerank_note(qid):
+        """The reranker's score for the expected document and for the current #1 pick."""
+        _record = stage2_failures.get(qid)
+        if not _record or not _record["expected"]:
+            return ""
+        _expected = _record["expected"][0]["rerank_score"]
+        _first = _record["picked"][0]["rerank_score"]
+        _verdict = "prefers the expected document" if _expected > _first else "prefers the #1 pick"
+
+        return f" · reranker: expected {_expected:.3f} vs #1 pick {_first:.3f} ({_verdict})"
+
+
+    return positions, rerank_note, stage2_cases, stage2_failures
+
+
 @app.cell
 def _(
     CITED_RUN,
@@ -1063,11 +1130,116 @@ def _(
     return
 
 
+@app.cell(hide_code=True)
+def stage2_problems(PIE, mo, stage2, stage2_failures):
+    _problems = [_q for _q, _o in sorted(stage2.items()) if _o in PIE[3:]]
+    _wins = []
+    _lines = [
+        "| Question | Outcome | Source | Expected document | BM25 rank (score / top) "
+        "| gte rank (similarity) | Better of the two | Reranker: expected | Reranker: #1 pick "
+        "| Expected minus #1 |",
+        "|---|---|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for _qid in _problems:
+        _record = stage2_failures.get(_qid)
+        if not _record or not _record["expected"]:
+            _lines.append(f"| {_qid} | {stage2[_qid]} | | *not measured* | | | | | | |")
+            continue
+        _e = _record["expected"][0]
+        _first = _record["picked"][0]["rerank_score"]
+        _gap = _e["rerank_score"] - _first
+        _wins.append(_gap > 0)
+        _lines.append(
+            f"| {_qid} | {stage2[_qid]} | {_e['source']} | {_e['title'][:70]} "
+            f"| {_e['bm25_rank']:,} ({_e['bm25_score']:.1f} / {_record['top_bm25_score']:.1f}) "
+            f"| {_e['gte_rank']:,} ({_e['gte_similarity']:.3f}) "
+            f"| {min(_e['bm25_rank'], _e['gte_rank']):,} "
+            f"| {_e['rerank_score']:.3f} | {_first:.3f} "
+            f"| {'**' if _gap > 0 else ''}{_gap:+.3f}{'**' if _gap > 0 else ''} |"
+        )
+    mo.md(
+        f"### Problem cases: {len(_problems)}\n\n"
+        "Wrong answers where no document was cited or the cited one doesn't answer. Ranks of "
+        "the expected document are out of the whole corpus, measured by `analyze.py` on the "
+        "current indexes (after the 2026-11-04 re-embed and BM25 rebuild). The reranker columns "
+        "score the expected document and the pipeline's current #1 pick for the question, the "
+        "same way the pipeline does (title and first chunk). A **bold** positive gap means the "
+        "reranker prefers the expected document: it would have ranked it first had it been in "
+        f"the top 50. That holds for **{sum(_wins)} of {len(_wins)}** measured cases.\n\n"
+        + "\n".join(_lines)
+    )
+
+    return
+
+
+@app.cell(hide_code=True)
+def stage2_small_chunks(FAILURES, json, mo, statistics):
+    _file = FAILURES / "data" / "gte_small_chunks.json"
+    if not _file.exists():
+        _view = mo.md(
+            "### Smaller gte chunks\n\n*Not measured yet: run `gte_small_chunks.py` into "
+            "`data/gte_small_chunks.json`.*"
+        )
+    else:
+        _rows = json.loads(_file.read_text())
+        _sizes = ["stored", "4000", "2000", "1000"]
+        _names = {"stored": "24,000 (stored)", "4000": "4,000", "2000": "2,000", "1000": "1,000"}
+
+        def _within(size, depth):
+            return sum(_row[size]["rank"] <= depth for _row in _rows)
+
+        _summary = (
+            "| Expected document in the pool's | "
+            + " | ".join(_names[_s] for _s in _sizes)
+            + " |\n|---|"
+            + "---:|" * len(_sizes)
+            + "\n"
+            + "\n".join(
+                f"| top {_d} | " + " | ".join(str(_within(_s, _d)) for _s in _sizes) + " |"
+                for _d in (1, 5, 10, 20, 50)
+            )
+            + "\n| median rank | "
+            + " | ".join(f"{statistics.median(_r[_s]['rank'] for _r in _rows):g}" for _s in _sizes)
+            + " |"
+        )
+        _lines = [
+            "| Question | Pool | "
+            + " | ".join(f"{_names[_s]}: rank (similarity)" for _s in _sizes)
+            + " | Chunks at 1,000 |",
+            "|---|---:|" + "---:|" * len(_sizes) + "---:|",
+        ]
+        for _row in _rows:
+            _lines.append(
+                f"| {_row['question_id']} | {_row['pool']} | "
+                + " | ".join(
+                    f"{_row[_s]['rank']} ({_row[_s]['target']:.3f})" for _s in _sizes
+                )
+                + f" | {_row['1000']['chunks']} |"
+            )
+        _view = mo.md(
+            "### Smaller gte chunks\n\n"
+            "For each problem case the pool is gte's own top 50 on the stored chunks, plus the "
+            "expected document and the pipeline's picks (`gte_small_chunks.py`). Every pool "
+            "document is re-chunked at 4,000, 2,000 and 1,000 characters (200, 200 and 100 "
+            "characters of context, the title on top), embedded with gte-modernbert-base and "
+            "scored by its best chunk. *Rank* is the expected document's place in the pool "
+            "(1 = top). On the stored chunks it is outside gte's top 50, so it ranks last there "
+            "unless gte already found it. The pool is small, so this is optimistic: over the "
+            "whole corpus, documents outside the pool can rise too.\n\n"
+            + _summary
+            + "\n\n"
+            + "\n".join(_lines)
+        )
+    _view
+
+    return
+
+
 @app.cell
-def _(mo, stage2):
+def _(mo, positions, stage2):
     stage2_picker = mo.ui.dropdown(
         options={
-            f"{_qid} · {_o or 'not cited or rated yet'}": _qid
+            f"{_qid} · {_o or 'not cited or rated yet'} · {positions(_qid)}": _qid
             for _qid, _o in sorted(stage2.items())
         },
         label="Wrong answer",
@@ -1078,19 +1250,31 @@ def _(mo, stage2):
 @app.cell
 def _(
     CITED_RUN,
+    DOCUMENTS_FILE,
+    agent_results,
+    agent_search_views,
     citations,
     doc_ratings,
     document_name,
+    document_view,
+    judge_view,
     load_by_doc_id,
     mo,
+    picks_table,
+    positions,
     questions,
+    quote,
+    rerank_note,
     stage2,
+    stage2_cases,
+    stage2_failures,
     stage2_picker,
     wrong_results,
 ):
+    _unrated = []
     _qid = stage2_picker.value
     if _qid is None:
-        _view = mo.md("*Pick a wrong answer to see its documents.*")
+        _parts = [mo.md("*Pick a wrong answer to see its documents.*")]
     else:
         _result = wrong_results[_qid]
         _question = questions[_qid]
@@ -1099,6 +1283,7 @@ def _(
         _ids = list(dict.fromkeys([*_result.retrieved_doc_ids, *_question.expected_doc_ids]))
         _docs = load_by_doc_id(_ids)
         _rows = []
+        _unrated = []
         for _d in _ids:
             _r = _ratings.get(_d)
             _marks = [
@@ -1112,23 +1297,104 @@ def _(
                 _marks.append("**expected**")
             _head = f"**{document_name(_docs[_d])}** ({' · '.join(_marks)}): "
             if _r is None:
-                _rows.append(_head + "*not rated*")
+                _unrated.append(_head.removesuffix(": "))
                 continue
             _body = f"**{_r['coverage']}**. {_r['reasoning']}"
             if _r["coverage"] != "none":
                 _body += f"\n\n> Answer: {_r['answer']}\n>\n> Quote: “{_r['quote']}”"
             _rows.append(_head + _body)
         _citation = f"**Why these are cited:** {_why}\n\n" if _why else ""
-        _view = mo.md(
-            f"### {_qid}: {stage2[_qid] or 'not cited or rated yet'}\n\n"
-            f"**Question:** {_question.text}\n\n"
-            f"**Gold answer:** {_question.gold_answer}\n\n"
-            f"**Pipeline answer (run {CITED_RUN}):** {_result.answer}\n\n"
-            + _citation
-            + "**Documents**, each rated on its own:\n\n"
-            + "\n\n---\n\n".join(_rows)
+        _parts = [
+            mo.md(
+                f"### {_qid}: {stage2[_qid] or 'not cited or rated yet'}\n\n"
+                f"**Expected document position:** {positions(_qid)}{rerank_note(_qid)}\n\n"
+                f"**Question:** {_question.text}\n\n"
+                f"**Gold answer:** {_question.gold_answer}\n\n"
+                f"**Pipeline answer (run {CITED_RUN}):** {_result.answer}\n\n"
+                + judge_view(_result, _question.answer_facts)
+                + "\n\n"
+                + _citation
+                + (
+                    "**Rated documents**, each rated on its own:\n\n"
+                    + "\n\n---\n\n".join(_rows)
+                    if _rows
+                    else "**Rated documents:** none (no document was cited)."
+                )
+            ),
+            mo.accordion(
+                {
+                    f"{'Expected' if _d in _question.expected_doc_ids else 'Retrieved'}: "
+                    f"{document_name(_docs[_d])} ({len(_docs[_d].content):,} characters)": (
+                        document_view(_docs[_d])
+                    )
+                    for _d in _ids
+                },
+                multiple=True,
+            ),
+        ]
+
+        _case = stage2_cases.get(_qid)
+        _record = stage2_failures.get(_qid)
+        _expected_text = []
+        if _case and _case["documents"]:
+            _document = _case["documents"][0]
+            _scores = ""
+            if _record and _record["expected"]:
+                _e = _record["expected"][0]
+                _scores = (
+                    f" Scores: BM25 #{_e['bm25_rank']:,} ({_e['bm25_score']:.1f} of a top "
+                    f"{_record['top_bm25_score']:.1f}), gte #{_e['gte_rank']:,} "
+                    f"({_e['gte_similarity']:.3f}), reranker {_e['rerank_score']:.3f}."
+                )
+            _expected_text.append(
+                f"**Expected document:** `{_document['doc_id']}`, {_document['chars']:,} "
+                f"characters, row {_document['row_index']:,} of `{DOCUMENTS_FILE}`.{_scores} "
+                "The window that shares the most words with the gold answer:\n\n"
+                + quote(_document["passage"])
+            )
+        if _record:
+            _expected_text.append(
+                "**Pipeline's top 5 now** (after the 2026-11-04 re-embed and BM25 rebuild; "
+                f"run {CITED_RUN}'s own top 5 is listed above):\n\n" + picks_table(_record["picked"])
+            )
+        else:
+            _expected_text.append(
+                "*Ranks and scores not measured yet: run `analyze.py` into "
+                "`data/failures_run15.json`.*"
+            )
+        _parts.append(mo.md("\n\n".join(_expected_text)))
+        if _qid in agent_results and _case:
+            _parts.append(
+                mo.md(
+                    "**Agent's own searches** (run 14), ✅ marks the expected document; open one "
+                    "to read it:"
+                )
+            )
+            _parts.extend(
+                agent_search_views(_case["agent_searches"], set(_question.expected_doc_ids))
+            )
+            _parts.append(
+                mo.accordion(
+                    {
+                        "Agent answer (run 14) and its judge": mo.md(
+                            (_case["agent_answer"] or "")
+                            + "\n\n"
+                            + judge_view(agent_results.get(_qid), _question.answer_facts)
+                        ),
+                    }
+                )
+            )
+        else:
+            _parts.append(mo.md("*The agent (run 14) didn't try this question.*"))
+    if _qid is not None and _unrated:
+        _parts.append(
+            mo.md(
+                "**Not rated:** only the documents an answer cites are rated, so these were "
+                "never checked on their own:\n\n" + "\n".join(f"- {_u}" for _u in _unrated)
+            )
         )
-    mo.vstack([stage2_picker, _view])
+    mo.vstack([stage2_picker, *_parts])
+
     return
 
 

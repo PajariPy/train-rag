@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search failures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f6f7f5;
+    --ink: #1f2b33;
+    --accent: #2d6a8e;
+    --ink-2: rgb(31 43 51 / 0.68);
+    --ink-3: rgb(31 43 51 / 0.45);
+    --line: rgb(31 43 51 / 0.12);
+    --wash: rgb(31 43 51 / 0.04);
+    --accent-wash: rgb(45 106 142 / 0.10);
+    --serif: "Literata", Georgia, serif;
+    --sans: "Public Sans", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font: 400 16px/1.55 var(--sans);
+    font-variant-numeric: tabular-nums;
+    display: grid; grid-template-columns: 300px 1fr;
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* side list */
+  aside {
+    border-right: 1px solid var(--line); height: 100vh; overflow-y: auto;
+    position: sticky; top: 0; padding: 20px 0;
+  }
+  aside h1 { font: 600 18px/1.3 var(--sans); margin: 0 20px 4px; }
+  aside .hint { margin: 0 20px 14px; color: var(--ink-3); font-size: 13px; }
+  .filters { display: flex; gap: 6px; margin: 0 20px 14px; flex-wrap: wrap; }
+  .filters button {
+    font: 500 13px var(--sans); color: var(--ink-2); background: none;
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; cursor: pointer;
+  }
+  .filters button[aria-pressed="true"] { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+  #list { list-style: none; margin: 0; padding: 0; }
+  #list button {
+    width: 100%; text-align: left; background: none; border: 0; cursor: pointer;
+    padding: 9px 20px; font: inherit; color: inherit; display: grid; gap: 1px;
+    border-left: 3px solid transparent;
+  }
+  #list button:hover { background: var(--wash); }
+  #list button[aria-current="true"] { background: var(--accent-wash); border-left-color: var(--accent); }
+  #list .qid { font-weight: 600; font-size: 14px; }
+  #list .meta { font-size: 12.5px; color: var(--ink-3); }
+  #list .noted {
+    margin-left: 8px; font: 500 11.5px var(--sans); color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 999px; padding: 0 7px; vertical-align: 1px;
+  }
+
+  .note { margin-top: 32px; }
+  .note label { display: block; font: 600 14px var(--sans); color: var(--ink-2); margin-bottom: 6px; }
+  .note textarea {
+    width: 100%; resize: vertical; font: 400 16px/1.55 var(--serif); color: var(--ink);
+    background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px;
+  }
+  .note textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+  .note p { margin: 6px 0 0; }
+
+  /* reading column */
+  main { padding: 40px 48px 120px; overflow-x: hidden; }
+  .column { max-width: 780px; margin: 0 auto; }
+  .judge-line { margin: -14px 0 24px; font-size: 15.5px; color: var(--ink-2); }
+  .eyebrow { color: var(--ink-3); font-size: 14px; margin: 0 0 10px; }
+  h2.question { font: 500 27px/1.35 var(--serif); margin: 0 0 28px; letter-spacing: -0.005em; }
+  h3 { font: 600 17px/1.3 var(--sans); margin: 44px 0 12px; }
+  p { margin: 0 0 12px; }
+  .muted { color: var(--ink-2); }
+  .small { font-size: 14px; }
+
+  /* the ruler */
+  .ruler { margin: 4px 0 8px; }
+  .ruler svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .ruler .legend { display: flex; gap: 22px; font-size: 14px; color: var(--ink-2); flex-wrap: wrap; }
+  .ruler .legend b { color: var(--ink); font-weight: 600; }
+
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 32px; }
+  .pair h4 { font: 600 14px var(--sans); color: var(--ink-2); margin: 0 0 6px; }
+  .pair .text { font: 400 16.5px/1.6 var(--serif); }
+  .verdict { margin-top: 18px; font-size: 14.5px; color: var(--ink-2); }
+  .facts { list-style: none; padding: 0; margin: 8px 0 0; font-size: 14.5px; }
+  .facts li { padding-left: 22px; position: relative; margin: 3px 0; }
+  .facts li::before { content: "–"; position: absolute; left: 4px; color: var(--ink-3); }
+  .facts li.hit::before { content: "✓"; color: var(--accent); }
+
+  blockquote {
+    margin: 10px 0 0; padding: 14px 18px; background: var(--wash); border-left: 3px solid var(--accent);
+    font: 400 15.5px/1.65 var(--serif); white-space: pre-wrap;
+  }
+  .doc { border-top: 1px solid var(--line); padding: 14px 0; }
+  .doc .head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  .doc .name { font-weight: 600; }
+  .doc.expected .name { color: var(--accent); }
+  .tag { font-size: 12.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+  .tag.strong { border-color: var(--accent); color: var(--accent); }
+  .doc .rating { margin-top: 6px; font-size: 15px; }
+  details > summary { cursor: pointer; color: var(--accent); font-size: 14px; margin-top: 6px; list-style: none; }
+  details > summary::before { content: "＋ "; }
+  details[open] > summary::before { content: "－ "; }
+  pre.full {
+    white-space: pre-wrap; font: 400 14.5px/1.6 var(--serif); max-height: 34rem; overflow-y: auto;
+    background: #fff; border: 1px solid var(--line); padding: 16px 18px; margin: 10px 0 0;
+  }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--ink-2); }
+  td.num, th.num { text-align: right; }
+  tr.expected td { color: var(--accent); font-weight: 600; }
+  tr.text-row td { padding: 0 0 14px; }
+  button.read {
+    font: 500 13px var(--sans); color: var(--accent); background: none; cursor: pointer;
+    border: 1px solid var(--accent); border-radius: 999px; padding: 2px 10px;
+  }
+  button.read[aria-expanded="true"] { color: var(--paper); background: var(--accent); }
+
+  .search { margin-top: 14px; }
+  .search .query { font: 500 15.5px var(--serif); }
+  .search .query .tool { font: 500 13px var(--sans); color: var(--ink-3); margin-right: 8px; }
+  .empty { color: var(--ink-3); padding: 60px 0; }
+
+  @media (max-width: 860px) {
+    body { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--line); }
+    main { padding: 24px 16px 80px; }
+    .pair { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Search failures</h1>
+  <p class="hint">Run 15's wrong answers. Press j and k to move.</p>
+  <div class="filters" role="group" aria-label="Show">
+    <button data-filter="problem" aria-pressed="true">Not found</button>
+    <button data-filter="ambiguous" aria-pressed="false">Ambiguous</button>
+    <button data-filter="all" aria-pressed="false">All</button>
+  </div>
+  <ul id="list"></ul>
+</aside>
+<main><div class="column" id="case"><p class="empty">Loading the cases…</p></div></main>
+
+<script>
+const CORPUS = 511962;
+const GROUPS = {
+  problem: o => o === "uncited" || o === "none",
+  ambiguous: o => o === "full" || o === "partial",
+  all: () => true,
+};
+let cases = [], visible = [], current = null, filter = "problem", notes = {};
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+/* The judge in one line: the best rating among the 5 given documents, and the expected one's. */
+const judgeLine = c => c.given_best == null && c.expected_coverage == null ? "judge: not rated"
+  : `judge: given ${c.given_best ?? "—"} · expected ${c.expected_coverage ?? "—"}`;
+const fmt = n => n == null ? "—" : n.toLocaleString("en-US");
+
+async function init() {
+  cases = await (await fetch("/api/cases")).json();
+  notes = await (await fetch("/api/notes")).json();
+  document.querySelectorAll(".filters button").forEach(b => b.onclick = () => setFilter(b.dataset.filter));
+  const fromHash = location.hash.slice(1);
+  if (fromHash && !GROUPS.problem(cases.find(c => c.id === fromHash)?.outcome)) filter = "all";
+  setFilter(filter, fromHash);
+}
+
+function setFilter(name, pick) {
+  filter = name;
+  document.querySelectorAll(".filters button").forEach(b => b.setAttribute("aria-pressed", b.dataset.filter === name));
+  visible = cases.filter(c => GROUPS[name](c.outcome));
+  document.getElementById("list").innerHTML = visible.map(c => `
+    <li><button data-id="${c.id}">
+      <span class="qid">${c.id}<span class="noted" ${notes[c.id] ? "" : "hidden"}>noted</span></span>
+      <span class="meta">${esc(c.outcome_label)}</span>
+      <span class="meta">${esc(c.source)} · BM25 #${fmt(c.bm25_rank)} · gte #${fmt(c.gte_rank)}</span>
+      <span class="meta">${judgeLine(c)}</span>
+    </button></li>`).join("");
+  document.querySelectorAll("#list button").forEach(b => b.onclick = () => show(b.dataset.id));
+  const target = visible.find(c => c.id === pick) || visible.find(c => c.id === current) || visible[0];
+  if (target) show(target.id); else document.getElementById("case").innerHTML = `<p class="empty">No cases in this group.</p>`;
+}
+
+async function show(id) {
+  current = id;
+  history.replaceState(null, "", "#" + id);
+  document.querySelectorAll("#list button").forEach(b => {
+    const on = b.dataset.id === id;
+    b.setAttribute("aria-current", on);
+    if (on) b.scrollIntoView({block: "nearest"});
+  });
+  const c = await (await fetch("/api/case/" + id)).json();
+  if (current !== id) return;
+  document.getElementById("case").innerHTML = render(c);
+  document.querySelectorAll("details[data-doc]").forEach(d => d.addEventListener("toggle", () => loadDoc(d), {once: true}));
+  document.querySelectorAll("button.read").forEach(b => b.onclick = () => toggleRow(b));
+  wireNote(id);
+  window.scrollTo(0, 0);
+}
+
+/* Save the note a second after typing stops, and when the box loses focus. */
+function wireNote(id) {
+  const box = document.getElementById("note"), status = document.getElementById("note-status");
+  let timer = null, sent = box.value;
+  const save = async () => {
+    clearTimeout(timer);
+    if (box.value === sent) return;
+    const text = box.value;
+    status.textContent = "Saving…";
+    try {
+      const r = await fetch("/api/note/" + id, {
+        method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({text}),
+      });
+      if (!r.ok) throw new Error(r.status);
+      const saved = await r.json();
+      sent = text;
+      if (saved.text) notes[id] = saved; else delete notes[id];
+      status.textContent = saved.text ? "Saved" : "Note removed";
+      const mark = document.querySelector(`#list button[data-id="${id}"] .noted`);
+      if (mark) mark.hidden = !saved.text;
+    } catch (err) {
+      status.textContent = "Not saved: the server didn't answer. Your text is still here; try again.";
+    }
+  };
+  box.addEventListener("input", () => { status.textContent = "Editing…"; clearTimeout(timer); timer = setTimeout(save, 1000); });
+  box.addEventListener("blur", save);
+}
+
+async function loadDoc(d) {
+  const pre = d.querySelector("pre");
+  const r = await fetch("/api/doc/" + encodeURIComponent(d.dataset.doc));
+  pre.textContent = r.ok ? (await r.json()).text : "This document isn't loaded.";
+}
+
+function docDetails(docId, label = "Read the full document") {
+  return `<details data-doc="${esc(docId)}"><summary>${label}</summary><pre class="full">Loading…</pre></details>`;
+}
+
+function readButton(docId) {
+  return `<button class="read" data-doc="${esc(docId)}" aria-expanded="false">Read</button>`;
+}
+
+/* Open or close a document's text in a row under its table row. */
+async function toggleRow(button) {
+  const row = button.closest("tr");
+  const open = button.getAttribute("aria-expanded") === "true";
+  if (open) {
+    row.nextElementSibling.remove();
+    button.setAttribute("aria-expanded", "false");
+    button.textContent = "Read";
+    return;
+  }
+  const textRow = document.createElement("tr");
+  textRow.className = "text-row";
+  textRow.innerHTML = `<td colspan="${row.children.length}"><pre class="full">Loading…</pre></td>`;
+  row.after(textRow);
+  button.setAttribute("aria-expanded", "true");
+  button.textContent = "Close";
+  const r = await fetch("/api/doc/" + encodeURIComponent(button.dataset.doc));
+  textRow.querySelector("pre").textContent = r.ok ? (await r.json()).text : "This document isn't loaded.";
+}
+
+/* The judge's verdict on a case, as a sentence. */
+function judgeSentence(c) {
+  if (c.given_best == null) return "The judge hasn't rated these documents.";
+  const given = {full: "one of the 5 given documents answers it fully",
+    partial: "one of the 5 given documents answers it partly",
+    none: "none of the 5 given documents answers it"}[c.given_best];
+  const expected = {full: "the expected document answers it fully",
+    partial: "the expected document answers it only partly",
+    none: "even the expected document doesn't answer it"}[c.expected_coverage] ?? "the expected document isn't rated";
+  return `Judge: ${given}; ${expected}.`;
+}
+
+/* Log-scale position of a rank between 1 and the corpus size, as a share of the width. */
+const scale = rank => Math.log10(rank) / Math.log10(CORPUS);
+
+function ruler(m) {
+  if (!m || !m.expected?.length) return `<p class="muted small">Ranks not measured for this question.</p>`;
+  const e = m.expected[0];
+  const W = 1000, y = 52;
+  const ticks = [1, 10, 100, 1000, 10000, 100000, CORPUS];
+  const marker = (rank, label, row) => {
+    const x = scale(rank) * W;
+    const ty = row === 0 ? 16 : 112;
+    return `<line x1="${x}" y1="${y - 14}" x2="${x}" y2="${y + 14}" stroke="var(--accent)" stroke-width="4"/>
+      <text x="${x}" y="${ty}" text-anchor="${x < 70 ? "start" : x > W - 70 ? "end" : "middle"}" font-size="21" font-weight="600" fill="var(--accent)">${label} #${fmt(rank)}</text>`;
+  };
+  return `<div class="ruler">
+    <svg viewBox="0 0 ${W} 120" role="img"
+      aria-label="Expected document: BM25 rank ${e.bm25_rank}, gte rank ${e.gte_rank}, out of ${CORPUS}">
+      <rect x="0" y="${y - 8}" width="${scale(50) * W}" height="16" fill="var(--accent-wash)"/>
+      <line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="var(--line)" stroke-width="2"/>
+      ${ticks.map((t, i) => `<line x1="${scale(t) * W}" y1="${y - 5}" x2="${scale(t) * W}" y2="${y + 5}" stroke="var(--ink-3)"/>
+        <text x="${scale(t) * W}" y="${y + 30}" text-anchor="${i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle"}" font-size="17" fill="var(--ink-3)">${["1", "10", "100", "1k", "10k", "100k", "512k"][i]}</text>`).join("")}
+      ${marker(e.bm25_rank, "BM25", 0)}
+      ${marker(e.gte_rank, "gte", 1)}
+    </svg>
+    <div class="legend">
+      <span>Shaded: the top 50 the reranker sees</span>
+      <span>Reranker, expected <b>${e.rerank_score.toFixed(3)}</b> vs #1 pick <b>${m.picked[0].rerank_score.toFixed(3)}</b></span>
+      <span>BM25 score ${e.bm25_score.toFixed(1)} of a top ${m.top_bm25_score.toFixed(1)} · gte ${e.gte_similarity.toFixed(3)}</span>
+    </div>
+  </div>`;
+}
+
+function judgeBlock(j) {
+  if (!j) return "";
+  return `<div class="verdict">${j.correct ? "Judged correct" : "Judged wrong"}, completeness ${(j.completeness ?? 0).toFixed(2)}. ${esc(j.reasoning)}
+    <ul class="facts">${j.facts.map(f => `<li class="${f.covered ? "hit" : ""}">${esc(f.fact)}</li>`).join("")}</ul></div>`;
+}
+
+function render(c) {
+  const rated = c.documents.filter(d => d.rating), unrated = c.documents.filter(d => !d.rating);
+  const docRow = d => `<div class="doc ${d.expected ? "expected" : ""}">
+      <div class="head"><span class="name">${esc(d.name)}</span>
+        ${d.rank ? `<span class="tag">given #${d.rank}</span>` : `<span class="tag">not given</span>`}
+        ${d.cited ? `<span class="tag strong">cited</span>` : ""}
+        ${d.expected ? `<span class="tag strong">expected</span>` : ""}
+        <span class="muted small">${fmt(d.chars)} characters</span></div>
+      ${d.rating ? `<div class="rating"><b>${esc(d.rating.coverage)}</b>. ${esc(d.rating.reasoning)}</div>
+        ${d.rating.coverage !== "none" ? `<blockquote>${esc(d.rating.quote)}</blockquote>` : ""}` : ""}
+      ${docDetails(d.doc_id)}
+    </div>`;
+
+  const ed = c.expected_doc, m = c.measured, sc = c.small_chunks;
+  let html = `<p class="eyebrow">${c.id} · ${esc(c.source)} · ${esc(c.outcome_label)}</p>
+    <h2 class="question">${esc(c.question)}</h2>
+    <p class="judge-line">${judgeSentence(c)}</p>
+    ${ruler(m)}
+    <div class="pair">
+      <div><h4>Gold answer</h4><div class="text">${esc(c.gold_answer)}</div></div>
+      <div><h4>Pipeline's answer</h4><div class="text">${esc(c.answer)}</div>${judgeBlock(c.judge)}</div>
+    </div>
+    <div class="note">
+      <label for="note">Your note on this case</label>
+      <textarea id="note" rows="4" placeholder="Why did search miss it? What would have found it?">${esc(notes[c.id]?.text)}</textarea>
+      <p id="note-status" class="muted small" aria-live="polite">${notes[c.id] ? "Saved " + esc(notes[c.id].updated.replace("T", " ").slice(0, 16)) : "Saves on its own as you type."}</p>
+    </div>`;
+
+  if (ed) {
+    html += `<h3>The expected document</h3>
+      <p class="muted">${esc(ed.title)}, ${fmt(ed.chars)} characters. The passage that shares the most words with the gold answer:</p>
+      <blockquote>${esc(ed.passage)}</blockquote>${docDetails(ed.doc_id)}`;
+  }
+
+  html += `<h3>The judge on each document</h3><p class="muted small">The 5 documents given to the LLM, then the expected one, each rated on its own without the gold answer.</p>`;
+  html += rated.length ? rated.map(docRow).join("") : `<p class="muted">No document was cited, so none was rated. The five it was given are under Not rated at the bottom.</p>`;
+
+  if (m) {
+    html += `<h3>What search returns now</h3>
+      <p class="muted small">The pipeline's top 5 on today's indexes: the first search, the one the agent starts from. Each one's rank in every search; open a row to read it.</p>
+      <table><thead><tr><th>#</th><th>Document</th><th>Ranks</th><th class="num">BM25</th><th class="num">gte</th><th class="num">Reranker</th><th></th></tr></thead><tbody>
+      ${m.picked.map((p, i) => `<tr><td>${i + 1}</td><td>[${esc(p.source)}] ${esc(p.title)}</td>
+        <td>${Object.entries(p.ranks).map(([k, v]) => `${esc(k)} #${v}`).join(", ")}</td>
+        <td class="num">${p.bm25_score.toFixed(1)}</td><td class="num">${p.gte_similarity.toFixed(3)}</td>
+        <td class="num">${p.rerank_score.toFixed(3)}</td><td>${readButton(p.doc_id)}</td></tr>`).join("")}
+      <tr class="expected"><td>—</td><td>Expected: ${esc(m.expected[0]?.title)}</td><td>BM25 #${fmt(m.expected[0]?.bm25_rank)}, gte #${fmt(m.expected[0]?.gte_rank)}</td>
+        <td class="num">${m.expected[0]?.bm25_score.toFixed(1)}</td><td class="num">${m.expected[0]?.gte_similarity.toFixed(3)}</td>
+        <td class="num">${m.expected[0]?.rerank_score.toFixed(3)}</td><td>${readButton(m.expected[0]?.doc_id)}</td></tr>
+      </tbody></table>`;
+  }
+
+  if (sc) {
+    const sizes = [["stored", "24,000 (stored)"], ["4000", "4,000"], ["2000", "2,000"], ["1000", "1,000"]];
+    html += `<h3>With smaller gte chunks</h3>
+      <p class="muted small">The expected document's place among gte's top 50 plus itself (${sc.pool} documents), re-chunked at each size.</p>
+      <table><thead><tr><th>Chunk size</th><th class="num">Rank in pool</th><th class="num">Its similarity</th><th class="num">Pool's best</th></tr></thead><tbody>
+      ${sizes.map(([k, n]) => `<tr><td>${n}</td><td class="num">${sc[k].rank}</td><td class="num">${sc[k].target.toFixed(3)}</td><td class="num">${sc[k].top.toFixed(3)}</td></tr>`).join("")}
+      </tbody></table>`;
+  }
+
+  html += `<h3>The agent's own searches</h3>`;
+  if (c.agent_searches == null) {
+    html += `<p class="muted">The agent didn't try this question.</p>`;
+  } else if (!c.agent_searches.length) {
+    html += `<p class="muted">None: it answered from the first search.</p>`;
+  } else {
+    html += c.agent_searches.map(s => `<div class="search">
+      <div class="query"><span class="tool">${s.tool === "keyword_search" ? "keyword" : "search"}</span>${esc(s.query)}</div>
+      ${s.refused ? `<p class="muted small">Refused: search limit reached.</p>` :
+        s.documents.map((d, i) => `<div class="doc ${d.expected ? "expected" : ""}">
+          <div class="head"><span class="name">${i + 1}. ${esc(d.name)}</span>${d.expected ? `<span class="tag strong">expected</span>` : ""}</div>
+          ${docDetails(d.doc_id, "Read it")}</div>`).join("")}
+    </div>`).join("");
+    html += `<h3>The agent's answer</h3><div class="text" style="font-family: var(--serif)">${esc(c.agent_answer)}</div>${judgeBlock(c.agent_judge)}`;
+  }
+
+  const neverSeen = unrated.filter(d => !d.expected);
+  if (neverSeen.length) {
+    html += `<h3>Not rated</h3><p class="muted small">Only documents an answer cites are rated, so these were never checked on their own.</p>`;
+    html += neverSeen.map(docRow).join("");
+  }
+  return html;
+}
+
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea") || e.metaKey || e.ctrlKey) return;
+  const i = visible.findIndex(c => c.id === current);
+  if (e.key === "j" && i < visible.length - 1) show(visible[i + 1].id);
+  if (e.key === "k" && i > 0) show(visible[i - 1].id);
+});
+init();
+</script>
+</body>
+</html>
