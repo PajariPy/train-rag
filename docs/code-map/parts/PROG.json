@@ -1,0 +1,109 @@
+{
+  "id": "PROG",
+  "kind": "module",
+  "label": "Progress page",
+  "summary": "Records how far long runs got in the database and shows the latest on a local web page.",
+  "details": "Produces a live view of the latest long run (ingestion pipeline or evaluation) for whoever is waiting on it.\n\nFlow:\n- A loop opens `RunProgress(engine, pipeline, total_items, ...)`, which inserts a `running` row into `pipeline_runs`.\n- After each batch the loop calls `advance(stage, items, chars, note)`, which adds to the row's counters and bumps `updated_at`.\n- On exit the row becomes `finished`, or `stopped` on an error or Ctrl+C.\n- `train-rag progress-page` starts a FastAPI app on 127.0.0.1; `page.html` polls `/api/progress`, which returns the newest row as a `RunState` with elapsed and remaining seconds.\n\nThe module does not run anything itself; other modules (data ingestion, evaluation) import `RunProgress`. Read `recorder.py` first, then `latest_run_state` in the repository for the time estimate.",
+  "children": [
+    {
+      "id": "PROG.B",
+      "kind": "base",
+      "label": "RunProgress recorder",
+      "summary": "Context manager any loop uses to write per-batch progress to the pipeline_runs table.",
+      "details": "The contract every caller follows: build `RunProgress` with the engine, a pipeline name, the total item count, optionally total characters and a `unit` such as `documents` or `questions`; use it in a `with` block; call `advance(stage, items, chars=0, note=None)` once per finished batch.\n\nIt owns its own `Session`, so it does not interfere with the caller's transactions, and it is meant for one thread. There are no subclasses; a new kind of run only needs to call these two methods. Pass `chars` on every `advance` if `total_chars` was given, otherwise the character-based estimate will be wrong.",
+      "symbols": ["RunProgress", "RunProgress.advance", "RunProgress.__exit__"],
+      "children": [
+        {
+          "id": "PROG.B.F1",
+          "kind": "file",
+          "label": "recorder.py",
+          "summary": "RunProgress: advance() per batch, marks run finished or stopped on exit.",
+          "details": "`RunProgress.__init__` calls `start_run` and keeps the stored row. `advance` calls `update_run` (commit per batch) and, at most once every `LOG_EVERY_SECONDS` (60), prints a line with the stage, done/total items and millions of characters left, plus the note. `__exit__` sets status `finished` when no exception occurred, else `stopped`, and closes the session; it does not suppress the exception.",
+          "symbols": ["RunProgress", "RunProgress.advance", "LOG_EVERY_SECONDS"],
+          "path": "src/train_rag/progress/recorder.py"
+        },
+        {
+          "id": "PROG.B.N1",
+          "kind": "note",
+          "label": "Database as the channel",
+          "summary": "Progress goes through the DB, so the page shows runs started in any process.",
+          "details": "The recorder writes to `pipeline_runs` rather than calling the web app. The page process only reads the newest row (`latest_run_state`), so it can be started before, after or in a different process from the run, and it survives restarts of either. The cost is one commit per batch, which is small next to embedding or LLM calls. The docstring of `RunProgress` states this: 'so it works for a run started anywhere'.",
+          "note_kind": "why"
+        },
+        {
+          "id": "PROG.B.N2",
+          "kind": "note",
+          "label": "Chars weigh the estimate",
+          "summary": "Optional character counts improve the time estimate when items differ in size.",
+          "details": "In `latest_run_state`, when `total_chars` is non-zero the speed is `done_chars / elapsed` and the time left is `(total_chars - done_chars) / speed`; otherwise it uses items. Documents vary widely in length, so counting items alone would mis-predict when long documents come last. Evaluation runs pass 0 characters and fall back to items per second.",
+          "note_kind": "why"
+        }
+      ]
+    },
+    {
+      "id": "PROG.G1",
+      "kind": "group",
+      "label": "Files",
+      "summary": "The web app side of the module.",
+      "details": "Only the reading side lives here: one Python file that builds the FastAPI app and serves the static `page.html` (not mapped as code). The recording side is the base.",
+      "children": [
+        {
+          "id": "PROG.G1.F1",
+          "kind": "file",
+          "label": "page.py",
+          "summary": "FastAPI app serving page.html and /api/progress, run with uvicorn on localhost.",
+          "details": "`create_app` makes the engine, calls `create_tables` (so the page works on a fresh database), and registers `/` (returns the text of `page.html`) and `/api/progress` (returns `latest_run_state` or null). `serve_progress_page(port)` prints the URL and runs uvicorn bound to 127.0.0.1 only, so the page is not exposed on the network.",
+          "symbols": ["create_app", "serve_progress_page"],
+          "path": "src/train_rag/progress/page.py"
+        }
+      ]
+    },
+    {
+      "id": "PROG.G2",
+      "kind": "group",
+      "label": "Also uses",
+      "summary": "Run record model, table and queries.",
+      "details": "The three layers (API model, SQL table, queries) that the recorder and the page share. They live outside the progress folder because the repo keeps all models, tables and repositories in their own packages.",
+      "children": [
+        {
+          "id": "PROG.G2.U1",
+          "kind": "file",
+          "label": "models/pipeline_run.py",
+          "summary": "RunState model returned by the API.",
+          "details": "`RunState` is the pydantic shape sent to the page: ids and names, `status`, done/total items and chars, `note`, timestamps, `seconds_elapsed`, and `seconds_left`, which is None until a speed can be measured.",
+          "symbols": ["RunState"],
+          "path": "src/train_rag/models/pipeline_run.py",
+          "side": true
+        },
+        {
+          "id": "PROG.G2.U2",
+          "kind": "file",
+          "label": "tables/pipeline_run.py",
+          "summary": "PipelineRunRecord table.",
+          "details": "`PipelineRunRecord` maps to table `pipeline_runs`. Character counts use `BigInteger` because corpora exceed 2 billion characters; timestamps are timezone-aware. A killed run keeps status `running`, so staleness is derived at read time.",
+          "symbols": ["PipelineRunRecord"],
+          "path": "src/train_rag/tables/pipeline_run.py",
+          "side": true
+        },
+        {
+          "id": "PROG.G2.U3",
+          "kind": "file",
+          "label": "repository/pipeline_run.py",
+          "summary": "start_run, update_run, latest_run_state queries.",
+          "details": "`start_run` inserts a row with stage `starting`. `update_run` adds items and chars, sets stage, status and optional note, and commits. `latest_run_state` picks the highest id, downgrades a `running` row older than `STALE_AFTER` to `stopped`, computes elapsed time (to now if running, else to `updated_at`) and the remaining time.",
+          "symbols": ["latest_run_state", "start_run", "update_run", "STALE_AFTER"],
+          "path": "src/train_rag/repository/pipeline_run.py",
+          "side": true
+        }
+      ]
+    },
+    {
+      "id": "PROG.N1",
+      "kind": "note",
+      "label": "Stale runs",
+      "summary": "A running row untouched for 5 minutes (STALE_AFTER) is treated as stopped or crashed.",
+      "details": "A process killed with SIGKILL or a power loss never reaches `__exit__`, so its row stays `running`. Instead of a heartbeat process, `latest_run_state` compares `updated_at` with now: a run updates after every batch, at least every few seconds, so more than `STALE_AFTER` (5 minutes) of silence means it is gone. The page then shows `stopped` and no time left. A single very slow batch over 5 minutes would be misreported as stopped.",
+      "note_kind": "why"
+    }
+  ]
+}

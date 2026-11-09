@@ -1,0 +1,156 @@
+{
+  "id": "RET",
+  "kind": "module",
+  "label": "Retrieval",
+  "summary": "Finds the documents for a query: BM25 and gte search, rank fusion, then a cross-encoder rerank.",
+  "details": "Turns a question into a ranked list of `RetrievedDocument` (doc id, title, best chunk, RRF score, rerank score) for the answering and evaluation code.\n\nFlow of `RetrievalPipeline.run`:\n- `normalize_text` cleans the query like the indexed text.\n- `keyword_search` (BM25 over whole documents) and `semantic_search` (gte-modernbert over chunks, every source table at once) run concurrently, 50 candidates each.\n- `reciprocal_rank_fusion` merges the two rankings.\n- `describe` loads titles and chunk texts for the fused documents.\n- `rerank` scores title plus chunk with a cross-encoder over the fused top 50 and the top `limit` are returned.\n\nData comes from the BM25 index on disk (built by `index_bm25`) and the pgvector embedding tables; results go to evaluation and the RAG answer step. The `Retriever` ABC in `retrieval.py` is the simpler synchronous API used for baseline comparisons. Read `pipelines/retrieval.py` first, then `fusion.py`.",
+  "command": "train-rag retrieve",
+  "children": [
+    {
+      "id": "RET.B",
+      "kind": "base",
+      "label": "Retriever",
+      "summary": "ABC with retrieve(question, limit) and searchable_doc_ids(); EmbeddingRetriever and Bm25Retriever implement it.",
+      "details": "The contract every retriever shares: a class attribute `name`, `retrieve(question, limit)` returning one `SearchHit` per document, best first, and `searchable_doc_ids()` returning the dataset ids the retriever can find at all (used to score evaluation only on findable documents).\n\nA new variant must set `name`, return at most one hit per document sorted best first, and make `retrieve` safe to call from several evaluation worker threads (the two implementations hold a `threading.Lock` around their shared model).\n\n`distance` is lower-is-better in both implementations: cosine distance for embeddings, the negated score for BM25.",
+      "symbols": ["Retriever", "Retriever.retrieve", "Retriever.searchable_doc_ids", "EmbeddingRetriever", "Bm25Retriever"],
+      "children": [
+        {
+          "id": "RET.B.F1",
+          "kind": "file",
+          "label": "retrieval.py",
+          "summary": "Retriever ABC, EmbeddingRetriever (pgvector tables) and Bm25Retriever (bm25s index).",
+          "details": "- `Retriever`: the ABC.\n- `EmbeddingRetriever(engine, embedder, field)`: finds which sources have embeddings of the field, embeds the question, queries each source table with `search_embeddings` for `limit * CHUNKS_PER_DOCUMENT` (5) chunks, then `best_per_document` keeps the closest chunk of each document.\n- `Bm25Retriever(index_dir)`: loads a `bm25s` index and its `documents.json`, tokenizes the question with the same stemmer as indexing, returns whole-document hits with empty text; documents scoring 0 are dropped.",
+          "symbols": ["Retriever", "EmbeddingRetriever.retrieve", "Bm25Retriever.retrieve", "CHUNKS_PER_DOCUMENT"],
+          "path": "src/train_rag/retrieval.py"
+        },
+        {
+          "id": "RET.B.N1",
+          "kind": "note",
+          "label": "Interchangeable retrievers",
+          "summary": "Strategy: both retrievers return SearchHit lists, so evaluation can swap them by name.",
+          "details": "`Retriever` is a Strategy interface. `EmbeddingRetriever` (name `embedding`) and `Bm25Retriever` (name `bm25`) both return `list[SearchHit]` and expose `searchable_doc_ids`, so the evaluation code compares them with identical code. `Bm25Retriever` fits the shape by filling `field=\"document\"`, empty `text` and `distance=-score`.",
+          "note_kind": "pattern"
+        },
+        {
+          "id": "RET.B.N2",
+          "kind": "note",
+          "label": "Locks around shared models",
+          "summary": "A threading.Lock guards the embedder and stemmer because evaluation runs worker threads.",
+          "details": "Both retrievers create `self.lock = threading.Lock()`. In `EmbeddingRetriever.retrieve` the lock wraps `embedder.embed` (one GPU model); in `Bm25Retriever.retrieve` it wraps tokenizing and `model.retrieve` because the stemmer object is shared. The inline comments say the evaluation's worker threads call them concurrently. The async pipeline uses an `asyncio.Lock` for the same reason (see RET.V1).",
+          "note_kind": "why"
+        }
+      ]
+    },
+    {
+      "id": "RET.V1",
+      "kind": "variant",
+      "label": "Hybrid pipeline",
+      "summary": "Async BM25 + gte chunk search fused with reciprocal rank fusion, then described with title and chunk.",
+      "details": "Unlike the single-search retrievers, `RetrievalPipeline` runs BM25 and gte chunk search together and fuses them. It is async so many queries share one loaded embedder and index.\n\n- `CANDIDATES = 50` documents are taken from each ranking; gte fetches `CANDIDATES * CHUNKS_PER_DOCUMENT` chunks per source table, then keeps each document's best chunk.\n- `reciprocal_rank_fusion` with `RRF_K = 60`; gte is listed first so its best chunk describes the document.\n- `describe` batches title and chunk-text queries per source.\n- `run_keywords` is a BM25-only path for exact names, ids and rare terms.\n- `RetrievalPipeline.load(rerank=False)` skips the reranker and returns the fused order.\n\nOn the full 511,962-document corpus the hybrid scored Recall@10 71.4% (article 002).",
+      "symbols": ["RetrievalPipeline", "RetrievalPipeline.run", "RetrievalPipeline.semantic_search", "reciprocal_rank_fusion", "best_per_document", "run_retrieval"],
+      "children": [
+        {
+          "id": "RET.V1.F1",
+          "kind": "file",
+          "label": "pipelines/retrieval.py",
+          "summary": "RetrievalPipeline: normalize, search both ways, fuse, load text, rerank.",
+          "details": "- `RetrievalPipeline.load` builds the gte embedder, the BM25 retriever and optionally the reranker.\n- `run(query, limit)` is the six numbered steps; with a reranker it fuses `RERANK_DEPTH` (50) documents, without one only `limit`.\n- `keyword_search` and `semantic_search` use `asyncio.to_thread` for the blocking models; `search_source` queries one table per async session.\n- `describe`, `load_titles` and `load_texts` attach title and chunk text.\n- `rerank` builds `title\\ntext` strings and sorts by score.\n- `run_retrieval` is the one-shot helper used by the CLI.",
+          "symbols": ["RetrievalPipeline.run", "RetrievalPipeline.load", "RetrievalPipeline.rerank", "RetrievalPipeline.describe", "run_retrieval", "CANDIDATES", "RERANK_DEPTH"],
+          "path": "src/train_rag/pipelines/retrieval.py"
+        },
+        {
+          "id": "RET.V1.F2",
+          "kind": "file",
+          "label": "fusion.py",
+          "summary": "best_per_document and reciprocal_rank_fusion (k=60).",
+          "details": "- `best_per_document(hits, limit)`: sorts chunk hits by distance and keeps the first per `document_id`.\n- `reciprocal_rank_fusion(rankings, limit, k=60)`: each document adds `1 / (k + rank)` for every ranking that found it, records its per-ranking `ranks`, and takes its chunk `position` from the first ranking that found it. `RRF_K = 60` is the value of Cormack et al. 2009.",
+          "symbols": ["reciprocal_rank_fusion", "best_per_document", "RRF_K"],
+          "path": "src/train_rag/fusion.py"
+        },
+        {
+          "id": "RET.V1.N1",
+          "kind": "note",
+          "label": "Hybrid beats either search alone",
+          "summary": "Equal-weight RRF of BM25 and gte lifts Recall@10 over each; the top 50 of each feed the fusion.",
+          "details": "Article 002 reports that BM25 and gte miss different questions, so the pipeline takes the top 50 documents from each and merges them with equal-weight RRF. On the full corpus the hybrid reached Recall@5 62.9% and Recall@10 71.4%, about 3 points above the best single search at Recall@10. The article also notes the trade-off: the hybrid helps the top 10 but hurts the top 1 (41.7% Recall@1), which the reranker later repairs.",
+          "note_kind": "why",
+          "doc": "docs/articles/002_first_retrieval_baselines.md"
+        },
+        {
+          "id": "RET.V1.N2",
+          "kind": "note",
+          "label": "Async steps, one function each",
+          "summary": "run() reads as numbered steps; blocking models run in asyncio.to_thread behind a model lock.",
+          "details": "`run()` is annotated `# 1. Normalize` through `# 6. Rerank`, each step one small method. The blocking embedder and reranker run in `asyncio.to_thread`, and an `asyncio.Lock` (`model_lock`) serialises GPU use because concurrent queries share the models. Database work uses `AsyncSession` and `asyncio.gather` across source tables.",
+          "note_kind": "style"
+        }
+      ]
+    },
+    {
+      "id": "RET.V2",
+      "kind": "variant",
+      "label": "Cross-encoder rerank",
+      "summary": "Reranker ABC and gte-reranker-modernbert scoring the title and chunk of the fused top 50.",
+      "details": "A second stage on top of the hybrid fusion. A cross-encoder reads the query together with a document's `title\\nchunk` (up to 8,192 tokens) and returns a relevance score, which is more precise than comparing separate vectors but costs one model pass per document.\n\n- `Reranker` ABC: `score(query, texts)` returns one float per text, higher is better, in input order.\n- `GteModernBertReranker` loads `Alibaba-NLP/gte-reranker-modernbert-base` in fp16, batch size 4.\n- Enabled by default in `RetrievalPipeline.load`; the pipeline sorts by `rerank_score`.\n\nArticle 002: reranking the top 50 lifted Recall@1 from 41.7% to 64.0% and Recall@10 from 71.4% to 78.8%, at about 3.7 s per question on a laptop GPU.",
+      "symbols": ["Reranker", "GteModernBertReranker", "GteModernBertReranker.score"],
+      "children": [
+        {
+          "id": "RET.V2.F1",
+          "kind": "file",
+          "label": "reranker.py",
+          "summary": "Reranker ABC and GteModernBertReranker (fp16, length-sorted batches).",
+          "details": "`GteModernBertReranker.score` sorts texts shortest first so each batch holds similar lengths and little padding is computed, calls `CrossEncoder.predict`, then restores the original order. `max_tokens = 8192`, `torch_dtype=float16`.",
+          "symbols": ["Reranker", "GteModernBertReranker", "GteModernBertReranker.score", "GTE_RERANKER"],
+          "path": "src/train_rag/reranker.py"
+        },
+        {
+          "id": "RET.V2.N1",
+          "kind": "note",
+          "label": "Top 50 reranked",
+          "summary": "Reranking the full fused top 50 gave the best recall; the fused top 50 caps it at 82.4%.",
+          "details": "Article 002 saved all 50 reranked results and scored shallower depths from the same run. Recall@10: top 10 71.4%, top 20 74.9%, top 30 77.9%, top 50 78.8%. Reranking only the top 10 cannot raise Recall@10, only reorder; depth shows diminishing returns (top 30 gets most of the gain). The fused top 50 contains 82.4% of expected documents, the ceiling for any reranking, hence `RERANK_DEPTH = 50`. Cost is proportional to depth.",
+          "note_kind": "why",
+          "doc": "docs/articles/002_first_retrieval_baselines.md"
+        }
+      ]
+    },
+    {
+      "id": "RET.G1",
+      "kind": "group",
+      "label": "Also uses",
+      "summary": "Models and queries the retrieval code calls.",
+      "details": "Files outside the retrieval module that it depends on: the pydantic result types passed between steps, and the SQL queries that read chunks and titles.",
+      "children": [
+        {
+          "id": "RET.G1.U1",
+          "kind": "file",
+          "label": "models/retrieval.py",
+          "summary": "SearchHit, IndexedDocument and RetrievedDocument.",
+          "details": "- `SearchHit`: one embedded text found for a query, with cosine `distance`, chunk `position` and `text`.\n- `IndexedDocument`: a row of the BM25 index's `documents.json`.\n- `RetrievedDocument`: pipeline output with RRF `score`, per-ranking `ranks`, `title`, `text` and optional `rerank_score`.",
+          "symbols": ["SearchHit", "RetrievedDocument", "IndexedDocument"],
+          "path": "src/train_rag/models/retrieval.py",
+          "side": true
+        },
+        {
+          "id": "RET.G1.U2",
+          "kind": "file",
+          "label": "repository/search.py",
+          "summary": "nearest_chunks, chunk_texts and document_titles queries.",
+          "details": "Async queries: `nearest_chunks` orders one source table by pgvector cosine distance and returns hits without text (chunks can be tens of thousands of characters), `chunk_texts` loads texts only for the final (document, position) keys, `document_titles` loads titles by row id.",
+          "symbols": ["nearest_chunks", "chunk_texts", "document_titles"],
+          "path": "src/train_rag/repository/search.py",
+          "side": true
+        }
+      ]
+    },
+    {
+      "id": "RET.N1",
+      "kind": "note",
+      "label": "Misses are search failures",
+      "summary": "For 50 of 125 semantic questions no expected document was in the fused top 50.",
+      "details": "Article 003 traces wrong answers back to retrieval. Article 002 tabulates semantic questions by where the expected document ranked: for 50 of the 125 semantic questions it was not in the top 50 at all, so the reranker cannot help and the answering model never sees the right text. Fixing these needs a different search (for example rewriting the query), not a better reranker or prompt.",
+      "note_kind": "why",
+      "doc": "docs/articles/003_why_search_misses.md"
+    }
+  ]
+}
