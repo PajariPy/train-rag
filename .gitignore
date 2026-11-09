@@ -29,3 +29,6 @@ temp/
 # Gemini batch inputs and raw outputs (large, regenerable)
 exploration/*/data/batch_requests.jsonl
 exploration/*/data/batch_results.jsonl
+
+# Fine-tuning outputs (LoRA adapters, logs) copied back from rented GPUs
+exploration/fact_extraction/runs/

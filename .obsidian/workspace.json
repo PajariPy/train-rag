@@ -4,17 +4,24 @@
     "type": "split",
     "children": [
       {
-        "id": "841914836cfe5005",
+        "id": "373de8a19bfc275c",
         "type": "tabs",
         "children": [
           {
-            "id": "2a1e66d930be73bf",
+            "id": "64e7bb44a8b56f5b",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
-              "icon": "lucide-file",
-              "title": "New tab"
+              "type": "canvas",
+              "state": {
+                "file": "docs/research/semantic_search_failure_problem.canvas",
+                "viewState": {
+                  "x": 2145.142668895152,
+                  "y": 5514.199736181392,
+                  "zoom": -0.04099437038062137
+                }
+              },
+              "icon": "lucide-layout-dashboard",
+              "title": "semantic_search_failure_problem"
             }
           }
         ]
@@ -181,19 +188,38 @@
       "bases:Create new base": false
     }
   },
-  "active": "2a1e66d930be73bf",
+  "active": "64e7bb44a8b56f5b",
   "lastOpenFiles": [
-    "temp/recall_compare.py",
-    "temp/002_agent_transfer_guide.md",
-    "temp/002_agent_transfer_guide.md.tmp.1436889.71025da74b9c",
-    "src/train_rag/progress/__pycache__/page.cpython-313.pyc",
-    "src/train_rag/__pycache__/index_summaries.cpython-313.pyc",
-    "src/train_rag/__pycache__/evaluate.cpython-313.pyc",
-    "src/train_rag/__pycache__/download.cpython-313.pyc",
-    "src/train_rag/__pycache__/main.cpython-313.pyc",
-    "src/train_rag/evaluation/__pycache__/summary_search.cpython-313.pyc",
-    "src/train_rag/__pycache__/reranker.cpython-313.pyc",
-    "src/train_rag/repository/__pycache__/search.cpython-313.pyc",
-    "src/train_rag/repository/__pycache__/inferred_messages.cpython-313.pyc"
+    "docs/superpowers/plans/2026-11-09-clarification-eval.md.tmp.119168.36a3d8268eb7",
+    "docs/superpowers/plans/2026-11-09-clarification-eval.md",
+    "docs/superpowers/plans/2026-11-09-clarification-eval.md.tmp.119168.661167a36496",
+    "docs/superpowers/plans",
+    "docs/superpowers/specs/2026-11-09-clarification-eval-design.md.tmp.119168.225e27fc3ff9",
+    "docs/superpowers/specs/2026-11-09-clarification-eval-design.md.tmp.119168.ab9012847e91",
+    "docs/superpowers/specs/2026-11-09-clarification-eval-design.md.tmp.119168.21467f79739b",
+    "docs/superpowers/specs/2026-11-09-clarification-eval-design.md",
+    "docs/superpowers/specs/2026-11-09-clarification-eval-design.md.tmp.119168.ca5bb44691df",
+    "docs/superpowers/specs",
+    "docs/superpowers",
+    "docs/articles/006_first_lora_and_checking_the_labels.md.tmp.119168.6b1b269f8cb1",
+    "docs/articles/006_first_lora_and_checking_the_labels.md.tmp.119168.8b114e2e861c",
+    "temp/session_summary_2026-11-09.md",
+    "docs/research/document_growth_problem.canvas",
+    "docs/brainstorm/003_fact_index_options.canvas",
+    "docs/research/semantic_search_failure_problem.canvas",
+    "Untitled.canvas",
+    "docs/articles/004_wrong_answers_after_the_judge.md",
+    "docs/brainstorm/002_swyg_code_map.md",
+    "exploration/slack_splitter/README.md",
+    "exploration/date_judge/README.md",
+    "exploration/channel_judge/README.md",
+    "exploration/attendee_extractor/README.md",
+    "docs/articles/003_why_search_misses.md",
+    "docs/articles/002_first_retrieval_baselines.md",
+    "docs/articles/002-1_rag_cost_savings.md",
+    "docs/articles/001_data_exploration_and_parsing.md",
+    "docs/brainstorm/001_injection.md",
+    "CLAUDE.md",
+    "temp/002_agent_transfer_guide.md"
   ]
 }

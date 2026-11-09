@@ -1,0 +1,507 @@
+{
+  "id": "STORE",
+  "kind": "module",
+  "label": "Storage layer",
+  "summary": "Postgres storage: pydantic models, SQLModel tables and repository queries.",
+  "children": [
+    {
+      "id": "STORE.B",
+      "kind": "base",
+      "label": "database.py",
+      "summary": "Engine factories and create_tables for the Postgres schema.",
+      "children": [
+        {
+          "id": "STORE.B.F1",
+          "kind": "file",
+          "label": "database.py",
+          "summary": "database_url, sync and async engines, create_tables with vectorscale",
+          "path": "src/train_rag/database.py",
+          "details": "Imports `train_rag.tables` with `noqa: F401` purely so the table classes register on `SQLModel.metadata`. `create_tables` is called by the import and setup scripts before first use; it is idempotent. The vectorscale extension must exist before `create_all`, because the embedding tables use the `vector` column type.",
+          "symbols": [
+            "create_tables",
+            "get_async_engine",
+            "database_url"
+          ]
+        },
+        {
+          "id": "STORE.B.N1",
+          "kind": "note",
+          "note_kind": "why",
+          "label": "Manual migration",
+          "summary": "create_tables adds eval_results.cited_doc_ids by ALTER because create_all never adds columns to existing tables.",
+          "details": "`create_all` only creates missing tables, never adds columns to existing ones. When `eval_results.cited_doc_ids` was added (JSONB, NOT NULL, default `'[]'`), existing databases would have broken, so `create_tables` ends with `ALTER TABLE eval_results ADD COLUMN IF NOT EXISTS cited_doc_ids ...`. There is no Alembic; any future column added to an existing table needs the same kind of line here. The `trace` column of the same table uses a `server_default` too but has no ALTER line."
+        }
+      ],
+      "details": "`database.py` is the shared entry point every other group depends on.\n\n- `database_url()` reads `DATABASE_URL`, falling back to the local docker-compose database on port 5434.\n- `get_engine()` gives the sync engine used by ingestion and evaluation; `get_async_engine()` gives the async psycopg engine used by the retrieval pipeline (`nearest_chunks`, `chunk_texts`, `document_titles`).\n- `create_tables(engine)` runs `CREATE EXTENSION IF NOT EXISTS vectorscale CASCADE` (which brings pgvector and the DiskANN index), then `SQLModel.metadata.create_all`, then one manual `ALTER TABLE`.\n\nA new table only needs to be imported in `tables/__init__.py`; `database.py` imports that package for its side effect of registering the models.",
+      "symbols": [
+        "database_url",
+        "get_engine",
+        "get_async_engine",
+        "create_tables"
+      ]
+    },
+    {
+      "id": "STORE.V1",
+      "kind": "variant",
+      "label": "Documents",
+      "summary": "Raw dataset documents: table, queries and size model.",
+      "children": [
+        {
+          "id": "STORE.V1.F1",
+          "kind": "file",
+          "label": "document.py",
+          "summary": "DocumentRecord: raw document row with provenance and size",
+          "path": "src/train_rag/tables/document.py",
+          "details": "`DocumentRecord` maps table `documents`. Columns `doc_id`, `dataset` and `source_type` are indexed; `title` and `content` are unbounded Text. `char_count` and `byte_size` are stored at load time. Other tables point at it through `documents.id` (`document_id` foreign keys in parsed, embedding and inferred tables).",
+          "symbols": [
+            "DocumentRecord"
+          ]
+        },
+        {
+          "id": "STORE.V1.F2",
+          "kind": "file",
+          "label": "document.py",
+          "summary": "insert_documents, counts by source, document_sizes, get_document",
+          "path": "src/train_rag/repository/document.py",
+          "details": "Query functions on `documents`:\n- `insert_documents` does an idempotent bulk insert on the provenance key.\n- `count_documents_by_source` groups counts by source type for one dataset.\n- `document_sizes` computes chars and printed lines in SQL so text never leaves the database (escaped `\\n` count as line breaks).\n- `load_artifacts`, `load_documents`, `get_document` and `sample_artifacts` read rows back; `document_ids` and `document_lengths` return ids and sizes.\n- `bracketed_documents` streams (with `yield_per`) documents whose text starts with `[` and ends with `]`, candidates for stringified lists.\n- `sample_document_ids` picks a repeatable random sample from a seed; `ids_of_doc_ids` maps dataset ids to row ids.\n- `to_artifact` converts a row to an `Artifact` that keeps `document_id`.",
+          "symbols": [
+            "insert_documents",
+            "document_sizes",
+            "load_documents",
+            "bracketed_documents",
+            "sample_document_ids",
+            "to_artifact"
+          ]
+        },
+        {
+          "id": "STORE.V1.F3",
+          "kind": "file",
+          "label": "document_size.py",
+          "summary": "DocumentSize: length in chars and printed lines",
+          "path": "src/train_rag/models/document_size.py",
+          "details": "`DocumentSize` has `document_id`, `source_type`, `chars` and `lines`. `lines` is the document as laid out on a page of a given width: each line break starts a line and long lines wrap. Produced by `document_sizes` for size analysis and chunk-size decisions.",
+          "symbols": [
+            "DocumentSize"
+          ]
+        },
+        {
+          "id": "STORE.V1.F4",
+          "kind": "file",
+          "label": "chunk.py",
+          "summary": "CleanDocument and Chunk flowing between ingestion steps",
+          "path": "src/train_rag/models/chunk.py",
+          "details": "Two small pydantic models that move between ingestion steps. `CleanDocument` is a normalized document (`document_id`, `doc_id`, `title`, `text`). `Chunk` is one piece to embed (`document_id`, `doc_id`, `position` counting from 0, `text`); `store_chunks` turns chunks into embedding rows.",
+          "symbols": [
+            "CleanDocument",
+            "Chunk"
+          ]
+        },
+        {
+          "id": "STORE.V1.F5",
+          "kind": "file",
+          "label": "artifact.py",
+          "summary": "Artifact and SourceType: source-agnostic retrievable item",
+          "path": "src/train_rag/models/artifact.py",
+          "details": "`SourceType` is the StrEnum of the nine sources (slack, gmail, linear, google_drive, hubspot, fireflies, github, jira, confluence). It is also used to build the per-source embedding table names. `Artifact` is the source-agnostic item (`id`, `source_type`, `title`, `content`, optional `source_file`, `row_index`, `document_id`); `document_id` is set only when loaded from the database.",
+          "symbols": [
+            "Artifact",
+            "SourceType"
+          ]
+        },
+        {
+          "id": "STORE.V1.F6",
+          "kind": "file",
+          "label": "corpus.py",
+          "summary": "Corpus: artifacts and questions from one source",
+          "path": "src/train_rag/models/corpus.py",
+          "details": "`Corpus` bundles the artifacts and questions loaded from one source. It is the in-memory counterpart to what `import_db.py` writes into `documents` and `questions`.",
+          "symbols": [
+            "Corpus"
+          ]
+        }
+      ],
+      "details": "Table `documents` (`DocumentRecord`) is the raw corpus: one row per source document, with `doc_id`, `dataset`, `source_type`, `title`, `content` (Text), `char_count`, `byte_size`, `source_file`, `row_index` and `loaded_at`.\n\n`doc_id` is deliberately not unique, because the dataset reuses ids for near-duplicate documents with conflicting facts. Identity is the unique constraint `(dataset, source_file, row_index)`, so `insert_documents` uses `ON CONFLICT DO NOTHING` and imports are repeatable.\n\nWriters: `import_db.py` via `insert_documents`. Readers: `parsing.py` (`to_artifact`), `index_summaries.py` (`load_artifacts`), `index_bm25.py` and `pipelines/data_ingestion.py` (`load_documents`, `document_ids`, `bracketed_documents`), `sampling.py` (`sample_document_ids`, `ids_of_doc_ids`) and `repository/embedding.py` (`document_lengths`).\n\nThe models in this group (`Artifact`, `Corpus`, `CleanDocument`, `Chunk`, `DocumentSize`) are the in-memory shapes passed between loaders, parsers and chunkers.",
+      "symbols": [
+        "DocumentRecord",
+        "insert_documents",
+        "load_documents",
+        "to_artifact",
+        "Artifact"
+      ]
+    },
+    {
+      "id": "STORE.V2",
+      "kind": "variant",
+      "label": "Parsed documents",
+      "summary": "Typed fields parsers found, stored beside raw text.",
+      "children": [
+        {
+          "id": "STORE.V2.F1",
+          "kind": "file",
+          "label": "parsed_document.py",
+          "summary": "ParsedDocumentRecord: parser output per raw document",
+          "path": "src/train_rag/tables/parsed_document.py",
+          "details": "`ParsedDocumentRecord` maps `parsed_documents`. One row per document (unique `document_id`); `kind`, `source_type` and `doc_id` are indexed. `data` is JSONB, `useful` and `flagged` are booleans set by the parser.",
+          "symbols": [
+            "ParsedDocumentRecord"
+          ]
+        },
+        {
+          "id": "STORE.V2.F2",
+          "kind": "file",
+          "label": "parsed_document.py",
+          "summary": "upsert_parsed_documents; strips NUL characters",
+          "path": "src/train_rag/repository/parsed_document.py",
+          "details": "`upsert_parsed_documents(session, documents)` builds one row per `ParsedDocument` (kind is `type(document).__name__`, data is `model_dump(mode=\"json\")` passed through `without_nul`) and upserts on `document_id`. `without_nul` recursively strips NUL characters from strings, lists and dicts.",
+          "symbols": [
+            "upsert_parsed_documents",
+            "without_nul"
+          ]
+        },
+        {
+          "id": "STORE.V2.N1",
+          "kind": "note",
+          "note_kind": "why",
+          "label": "NUL stripping",
+          "summary": "Postgres text and JSONB cannot hold NUL, so parsed values are cleaned in without_nul before upsert."
+        }
+      ],
+      "details": "Table `parsed_documents` (`ParsedDocumentRecord`) stores what the parsers extracted from each raw document, next to the raw text: `document_id` (unique FK to `documents.id`), `doc_id`, `source_type`, `kind` (parsed model class name such as `SlackThread` or `OpenText`), `useful`, `flagged` and `data` (JSONB dump of the parsed model: participants, dates, channel and so on).\n\nSources with no parser (Google Drive, Confluence) have no row. `useful` is False for documents with too little text to index.\n\nWriter: `pipelines/data_ingestion.py` via `upsert_parsed_documents`, which deliberately does not commit so the parse commits together with the chunks. The JSONB data is for filtering and linking documents later.",
+      "symbols": [
+        "ParsedDocumentRecord",
+        "upsert_parsed_documents",
+        "without_nul"
+      ]
+    },
+    {
+      "id": "STORE.V3",
+      "kind": "variant",
+      "label": "Questions",
+      "summary": "Benchmark questions with gold answers.",
+      "children": [
+        {
+          "id": "STORE.V3.F1",
+          "kind": "file",
+          "label": "question.py",
+          "summary": "QuestionRecord: question, gold answer, expected evidence",
+          "path": "src/train_rag/tables/question.py",
+          "details": "`QuestionRecord` maps `questions`. `answer_facts`, `source_types` and `expected_doc_ids` are JSONB lists of strings; `id`, `dataset` and `question_type` are indexed or key.",
+          "symbols": [
+            "QuestionRecord"
+          ]
+        },
+        {
+          "id": "STORE.V3.F2",
+          "kind": "file",
+          "label": "question.py",
+          "summary": "insert/count/load questions and to_question conversion",
+          "path": "src/train_rag/repository/question.py",
+          "details": "`insert_questions` bulk inserts, `count_questions` counts per dataset, `load_questions` reads (with filters) and `to_question` converts a record into the `Question` model, parsing the enums.",
+          "symbols": [
+            "insert_questions",
+            "load_questions",
+            "to_question",
+            "count_questions"
+          ]
+        },
+        {
+          "id": "STORE.V3.F3",
+          "kind": "file",
+          "label": "question.py",
+          "summary": "Question and QuestionType",
+          "path": "src/train_rag/models/question.py",
+          "details": "`QuestionType` StrEnum (basic, semantic, intra_document_reasoning, project_related, constrained, conflicting_info, completeness, miscellaneous, high_level, info_not_found). `Question` is the pydantic model with `answerable`, which is False only for `info_not_found`.",
+          "symbols": [
+            "Question",
+            "QuestionType"
+          ]
+        }
+      ],
+      "details": "Table `questions` (`QuestionRecord`) holds the benchmark: string `id` primary key, `dataset`, `question_type`, `text`, `gold_answer`, plus JSONB lists `answer_facts` (facts a correct answer must contain), `source_types` and `expected_doc_ids` (documents that hold the evidence).\n\nWriter: `import_db.py` (`insert_questions`, `count_questions`). Readers: `evaluate.py` and `sampling.py` through `load_questions`, which returns pydantic `Question` objects via `to_question`.\n\n`QuestionType` has ten categories; `info_not_found` questions have deliberately missing answers, which `Question.answerable` reports.",
+      "symbols": [
+        "QuestionRecord",
+        "Question",
+        "QuestionType",
+        "load_questions",
+        "to_question"
+      ]
+    },
+    {
+      "id": "STORE.V4",
+      "kind": "variant",
+      "label": "Embeddings and search",
+      "summary": "Vector tables per source and size, with index and search.",
+      "children": [
+        {
+          "id": "STORE.V4.F1",
+          "kind": "file",
+          "label": "embedding.py",
+          "summary": "EmbeddingRecord base, Mini/Base variants, source_table factory",
+          "path": "src/train_rag/tables/embedding.py",
+          "details": "`EmbeddingRecord` is a plain SQLModel (not a table) with all columns. `MiniEmbeddingRecord` and `BaseEmbeddingRecord` fix the `Vector(384)` and `Vector(768)` types. `BASES` maps size to (class, table suffix). `source_table(dimensions, source_type)` creates the table class with `types.new_class`, and `EMBEDDING_TABLES[dimensions][source_type]` holds all of them, built at import time.",
+          "symbols": [
+            "EmbeddingRecord",
+            "source_table",
+            "EMBEDDING_TABLES",
+            "BASES"
+          ]
+        },
+        {
+          "id": "STORE.V4.F2",
+          "kind": "file",
+          "label": "embedding.py",
+          "summary": "Store, delete, reserve ids, index and search vectors",
+          "path": "src/train_rag/repository/embedding.py",
+          "details": "Write side:\n- `reserve_ids` takes ids from the table sequence in advance.\n- `store_chunks` uses them with `neighbour_ids` to insert chunks that already know `previous_id` and `next_id`.\n- `insert_embeddings` inserts in batches without committing.\n- `replace_embeddings`, `delete_embeddings` and `delete_document_embeddings` remove then insert for a model and field.\n\nRead side: `search_embeddings` (sync, cosine distance, returns `SearchHit` with text), `embedded_sources`, `embedded_doc_ids`, `embedded_document_ids`, `pending_documents` (documents not yet embedded) and `create_vector_index` / `drop_vector_index` (`USING diskann (embedding vector_cosine_ops)`).",
+          "symbols": [
+            "store_chunks",
+            "reserve_ids",
+            "neighbour_ids",
+            "replace_embeddings",
+            "search_embeddings",
+            "create_vector_index",
+            "pending_documents"
+          ]
+        },
+        {
+          "id": "STORE.V4.F3",
+          "kind": "file",
+          "label": "search.py",
+          "summary": "Async nearest_chunks, chunk_texts, document_titles for retrieval",
+          "path": "src/train_rag/repository/search.py",
+          "details": "Async versions for the retrieval pipeline. `nearest_chunks` selects only `document_id`, `doc_id`, `position` and distance (text left empty) because chunks can be tens of thousands of characters. `chunk_texts` then loads text just for the final hits, and `document_titles` maps row ids to titles.",
+          "symbols": [
+            "nearest_chunks",
+            "chunk_texts",
+            "document_titles"
+          ]
+        },
+        {
+          "id": "STORE.V4.F4",
+          "kind": "file",
+          "label": "retrieval.py",
+          "summary": "SearchHit, IndexedDocument, RetrievedDocument",
+          "path": "src/train_rag/models/retrieval.py",
+          "details": "`SearchHit` is one embedded text with its cosine `distance`. `IndexedDocument` is an entry in the BM25 index. `RetrievedDocument` is the pipeline output: reciprocal-rank-fusion `score`, `ranks` per ranking, best chunk `position` and `text`, `title` and an optional `rerank_score`.",
+          "symbols": [
+            "SearchHit",
+            "RetrievedDocument",
+            "IndexedDocument"
+          ]
+        },
+        {
+          "id": "STORE.V4.N1",
+          "kind": "note",
+          "note_kind": "pattern",
+          "label": "Dynamic tables",
+          "summary": "Table factory: source_table builds one SQLModel table per (vector size, source type) from a shared column base.",
+          "details": "`source_table` builds each table with `types.new_class` from a shared base and sets `__tablename__` to `<source>_<suffix>`; the class name is derived from the source and the base class name. Splitting by source keeps each DiskANN index small and lets retrieval search sources separately; splitting by vector size is needed because a pgvector column has a fixed dimension. `EMBEDDING_TABLES` is built at import time for every `SourceType`, so all tables are registered before `create_tables` runs."
+        }
+      ],
+      "details": "One embedding table per (vector size, source type), such as `slack_embeddings` (384 dimensions, MiniLM) and `slack_embeddings_768`. All share the columns of `EmbeddingRecord`: `document_id` (FK to `documents.id`), `doc_id`, `field` (`summary` or `chunk`), `position`, `previous_id` / `next_id` (neighbouring chunks of the same document), `model`, `text` and `embedding`. A document can therefore have many rows, per field, chunk and model.\n\nSearch is cosine distance on a pgvectorscale StreamingDiskANN index (`create_vector_index`, `drop_vector_index`).\n\nWriters: `index_summaries.py` (`replace_embeddings`, `create_vector_index`) and `pipelines/data_ingestion.py` (`store_chunks`, `pending_documents`, `embedded_document_ids`). Readers: `retrieval.py` (`search_embeddings`, `embedded_sources`, `embedded_doc_ids`) and `pipelines/retrieval.py` (async `nearest_chunks`, `chunk_texts`, `document_titles`, `embedded_sources`).",
+      "symbols": [
+        "EmbeddingRecord",
+        "source_table",
+        "search_embeddings",
+        "nearest_chunks",
+        "store_chunks",
+        "create_vector_index",
+        "SearchHit"
+      ]
+    },
+    {
+      "id": "STORE.V5",
+      "kind": "variant",
+      "label": "Evaluation runs",
+      "summary": "Evaluation runs and per-question results.",
+      "children": [
+        {
+          "id": "STORE.V5.F1",
+          "kind": "file",
+          "label": "evaluation.py",
+          "summary": "EvalRunRecord and EvalResultRecord",
+          "path": "src/train_rag/tables/evaluation.py",
+          "details": "`EvalRunRecord` (`eval_runs`) and `EvalResultRecord` (`eval_results`). `cited_doc_ids` and `trace` carry a `server_default` of `[]`; `cited_doc_ids` is also added by hand in `create_tables`.",
+          "symbols": [
+            "EvalRunRecord",
+            "EvalResultRecord"
+          ]
+        },
+        {
+          "id": "STORE.V5.F2",
+          "kind": "file",
+          "label": "evaluation.py",
+          "summary": "create_run, add_results, finish_run, list_runs",
+          "path": "src/train_rag/repository/evaluation.py",
+          "details": "`create_run` inserts a run, `add_results` converts `QuestionResult` objects into rows, `finish_run` stores the `RunSummary` and `finished_at`, `list_runs` lists a dataset's runs, `results_of_run` loads rows and `wrong_question_ids` returns the ids answered incorrectly (used to re-run only failures).",
+          "symbols": [
+            "create_run",
+            "add_results",
+            "finish_run",
+            "list_runs",
+            "wrong_question_ids"
+          ]
+        },
+        {
+          "id": "STORE.V5.F3",
+          "kind": "file",
+          "label": "evaluation.py",
+          "summary": "TraceStep, SystemAnswer, AnswerGrade, QuestionResult",
+          "path": "src/train_rag/models/evaluation.py",
+          "details": "`TraceStep` records one step (kinds `instructions`, `input`, `model`, `tool`) with text, thoughts, tool call data and token counts. `SystemAnswer` is what a RAG system returns (answer, retrieved and cited doc ids, trace). `AnswerGrade` is the judge verdict. `QuestionResult` combines them with a `score` property. `MetricSummary`, `RunSummary` and `RetrievalMetrics` (recall at k, `reachable`) aggregate results.",
+          "symbols": [
+            "QuestionResult",
+            "SystemAnswer",
+            "TraceStep",
+            "AnswerGrade",
+            "RunSummary",
+            "MetricSummary"
+          ]
+        }
+      ],
+      "details": "Two tables. `eval_runs` (`EvalRunRecord`): `dataset`, `system`, `judge`, `question_count`, `started_at`, `finished_at` and a JSONB `summary` holding the `RunSummary` once finished. `eval_results` (`EvalResultRecord`): one row per question per run, with `run_id` FK, `question_id`, `question_type`, `answer`, `retrieved_doc_ids` and `cited_doc_ids` (JSONB), `document_recall`, `extra_docs`, `correct`, `completeness`, `score`, `facts_covered`, `judge_reasoning`, `error` and `trace` (JSONB list of `TraceStep`).\n\nWriter: `evaluation/pipeline.py` (`create_run`, `add_results`, `finish_run`). Readers: `evaluate.py` (`wrong_question_ids`), run listings (`list_runs`, `results_of_run`).\n\nScore is correctness times completeness (0 if wrong, None if not graded).",
+      "symbols": [
+        "EvalRunRecord",
+        "EvalResultRecord",
+        "create_run",
+        "add_results",
+        "finish_run",
+        "QuestionResult",
+        "RunSummary"
+      ]
+    },
+    {
+      "id": "STORE.V6",
+      "kind": "variant",
+      "label": "Pipeline runs",
+      "summary": "Run progress and timing for the progress page.",
+      "children": [
+        {
+          "id": "STORE.V6.F1",
+          "kind": "file",
+          "label": "pipeline_run.py",
+          "summary": "PipelineRunRecord updated after every batch",
+          "path": "src/train_rag/tables/pipeline_run.py",
+          "details": "`PipelineRunRecord` maps `pipeline_runs`. Character counters use `BigInteger`. `total_items` is what this run had left at start, not the dataset total.",
+          "symbols": [
+            "PipelineRunRecord"
+          ]
+        },
+        {
+          "id": "STORE.V6.F2",
+          "kind": "file",
+          "label": "pipeline_run.py",
+          "summary": "start_run, update_run, latest_run_state with ETA",
+          "path": "src/train_rag/repository/pipeline_run.py",
+          "details": "`start_run` inserts a row, `update_run` adds progress and sets `updated_at`, and `latest_run_state` reads the newest run and computes status, elapsed and `seconds_left`.",
+          "symbols": [
+            "start_run",
+            "update_run",
+            "latest_run_state"
+          ]
+        },
+        {
+          "id": "STORE.V6.F3",
+          "kind": "file",
+          "label": "pipeline_run.py",
+          "summary": "RunState shown on the progress page",
+          "path": "src/train_rag/models/pipeline_run.py",
+          "details": "`RunState` is the flat view the progress page renders: counters, `status`, `note`, timestamps, `seconds_elapsed` and `seconds_left`.",
+          "symbols": [
+            "RunState"
+          ]
+        }
+      ],
+      "details": "Table `pipeline_runs` (`PipelineRunRecord`) tracks one run of a pipeline or evaluation: `pipeline`, `stage`, `status` (`running`, finished, ...), `unit`, `total_items` / `done_items`, optional `total_chars` / `done_chars` (BigInteger), `note`, `started_at`, `updated_at`.\n\nWriter: `progress/recorder.py` (`start_run`, `update_run` after every batch). Reader: `progress/page.py` through `latest_run_state`, which returns `RunState` with elapsed time and estimated time left.\n\nThe ETA assumes average speed so far, in characters per second when the run counts characters and in items per second otherwise. A run still `running` whose `updated_at` is older than `STALE_AFTER` is reported as `stopped`, which is how killed runs are detected.",
+      "symbols": [
+        "PipelineRunRecord",
+        "start_run",
+        "update_run",
+        "latest_run_state",
+        "RunState"
+      ]
+    },
+    {
+      "id": "STORE.V7",
+      "kind": "variant",
+      "label": "Inferred (LLM experiments)",
+      "summary": "LLM-derived attendees, dates and message splits stored apart from raw data.",
+      "children": [
+        {
+          "id": "STORE.V7.F1",
+          "kind": "file",
+          "label": "inferred_attendees.py",
+          "summary": "InferredAttendeesRecord: speakers per meeting",
+          "path": "src/train_rag/tables/inferred_attendees.py",
+          "details": "`InferredAttendeesRecord` maps `inferred_attendees`: one row per meeting with the speakers as JSONB `Person` dicts (name and optional role)."
+        },
+        {
+          "id": "STORE.V7.F2",
+          "kind": "file",
+          "label": "inferred_attendees.py",
+          "summary": "replace/load inferred attendees by document id",
+          "path": "src/train_rag/repository/inferred_attendees.py",
+          "details": "`replace_inferred_attendees(session, method, ...)` deletes rows with that `method`, adds the new ones and commits. `load_inferred_attendees` returns `dict[int, list[Person]]`."
+        },
+        {
+          "id": "STORE.V7.F3",
+          "kind": "file",
+          "label": "inferred_date.py",
+          "summary": "InferredDateRecord: estimated meeting date",
+          "path": "src/train_rag/tables/inferred_date.py",
+          "details": "`InferredDateRecord` maps `inferred_dates`: `held_on` date, `precision`, `evidence` text and `year_in_evidence` flag, one row per meeting."
+        },
+        {
+          "id": "STORE.V7.F4",
+          "kind": "file",
+          "label": "inferred_date.py",
+          "summary": "replace/load inferred dates by document id",
+          "path": "src/train_rag/repository/inferred_date.py",
+          "details": "`replace_inferred_dates` deletes by `method` then bulk adds (`InferredDateRecord(**inferred.model_dump())`) and commits; `load_inferred_dates` returns `dict[int, InferredDate]`."
+        },
+        {
+          "id": "STORE.V7.F5",
+          "kind": "file",
+          "label": "inferred_messages.py",
+          "summary": "InferredMessagesRecord: Slack thread message split",
+          "path": "src/train_rag/tables/inferred_messages.py",
+          "details": "`InferredMessagesRecord` maps `inferred_messages`: JSONB list of `SlackMessage` dicts (speaker, optional role, text) for one Slack thread."
+        },
+        {
+          "id": "STORE.V7.F6",
+          "kind": "file",
+          "label": "inferred_messages.py",
+          "summary": "replace/load inferred message splits",
+          "path": "src/train_rag/repository/inferred_messages.py",
+          "details": "`replace_inferred_messages` deletes by `method`, adds, commits; `load_inferred_messages` returns `dict[int, list[SlackMessage]]`."
+        },
+        {
+          "id": "STORE.V7.N1",
+          "kind": "note",
+          "note_kind": "pattern",
+          "label": "Replace and load",
+          "summary": "Replace-by-tool: each replace_* call overwrites what that tool stored earlier, then load_* returns a dict keyed by document id.",
+          "details": "Each `replace_*` function deletes all rows whose `method` equals the given tool name, then inserts the new rows and commits. A rerun of one experiment therefore replaces only its own output, while the `unique` `document_id` constraint means only one method's row can exist per document at a time. `load_*` returns dicts keyed by document id, so callers look up by `documents.id`."
+        }
+      ],
+      "details": "Three tables hold results of LLM experiments, kept apart so the raw `documents` stay untouched: `inferred_attendees` (JSONB `attendees` of `Person` objects, per meeting), `inferred_dates` (`held_on`, `precision`, `evidence`, `year_in_evidence`) and `inferred_messages` (JSONB `messages` of `SlackMessage` objects, per Slack thread). Each has a unique `document_id` FK to `documents.id` and an indexed `method` naming the tool or judge that produced it.\n\nWriters: the experiment tools, through `replace_inferred_attendees`, `replace_inferred_dates` and `replace_inferred_messages`. Reader: `pipelines/data_ingestion.py` through the `load_*` functions, which return dicts keyed by document id so ingestion can use them while building chunks.",
+      "symbols": [
+        "InferredAttendeesRecord",
+        "InferredDateRecord",
+        "InferredMessagesRecord",
+        "replace_inferred_dates",
+        "load_inferred_attendees",
+        "load_inferred_messages"
+      ]
+    },
+    {
+      "id": "STORE.N1",
+      "kind": "note",
+      "note_kind": "style",
+      "label": "Model, table, repository",
+      "summary": "Three layers per entity: pydantic model in models/, SQLModel table in tables/, plain query functions in repository/ taking a Session.",
+      "details": "Every entity follows the same three-layer layout, so to find how something is stored look for the same file name in all three folders. Example: `question` has `models/question.py` (`Question`), `tables/question.py` (`QuestionRecord`) and `repository/question.py` (`insert_questions`, `load_questions`, `to_question`). Repository functions take a `Session` (or `AsyncSession` in `search.py`), return pydantic models or records, and callers decide transaction scope; some commit (`replace_*`), others explicitly do not (`insert_embeddings`, `upsert_parsed_documents`, `store_chunks`)."
+    }
+  ],
+  "details": "The storage layer holds everything the other modules keep in Postgres (with the pgvector and vectorscale extensions): raw documents, parsed fields, benchmark questions, embeddings, evaluation results, pipeline progress and LLM-inferred data. It has no command of its own; it is imported by ingestion (`import_db.py`, `pipelines/data_ingestion.py`, `index_summaries.py`, `index_bm25.py`), retrieval (`retrieval.py`, `pipelines/retrieval.py`), evaluation (`evaluate.py`, `evaluation/pipeline.py`) and the progress page (`progress/`).\n\nEach entity is split in three layers: a pydantic model in `models/`, a SQLModel table in `tables/` and plain query functions in `repository/` that take a `Session`. `database.py` registers every table on `SQLModel.metadata` and creates them.\n\nTypical flow:\n- `import_db.py` writes `documents` and `questions`.\n- Ingestion reads documents, writes `parsed_documents` and per-source embedding tables.\n- Retrieval reads embeddings through `search_embeddings` / `nearest_chunks`.\n- Evaluation reads questions and writes `eval_runs` / `eval_results`.\n- Long runs record progress in `pipeline_runs`.\n\nStart with `database.py`, then `tables/document.py` and `tables/embedding.py`, which show the two main ideas: provenance-keyed documents and table-per-source vectors."
+}

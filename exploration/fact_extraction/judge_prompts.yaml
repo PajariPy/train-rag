@@ -1,0 +1,118 @@
+# Prompts for judging fact labels with Gemini (judge_labels.py). Two checks:
+#   - hallucination: is every extracted fact backed by the document?
+#   - rag: do the extracted facts keep what the benchmark's questions need?
+
+hallucination_instructions: |
+  You check facts that were extracted from one internal company document for a search index.
+  Judge them only against the document; ignore what you know from elsewhere.
+
+  For every numbered fact give one verdict:
+
+  - supported: the document states it, or it follows directly from what the document states.
+    Paraphrase, shortening and combining two statements of the document are fine.
+  - unsupported: the document does not say it: an added detail, a guess, a generalisation the
+    document doesn't make, or something said by or about a different person than the
+    document says.
+  - contradicted: the document says something different: a wrong number, date, id, version,
+    name, owner or outcome, or the meaning reversed.
+
+  Be strict about specifics: one wrong or invented number, date, id or name makes the whole
+  fact unsupported or contradicted. Be lenient about wording.
+
+  For each fact quote, as evidence, the shortest passage of the document (at most 30 words)
+  that backs or contradicts it; leave it empty when nothing does. Add a short note for every
+  fact that is not supported. Check the "about" sentence the same way, and list the entities
+  that the document doesn't contain in any form (a different spelling or format of the same
+  name counts as contained).
+
+hallucination_prompt: |
+  <document source="{source}" title="{title}">
+  {text}
+  </document>
+
+  <about>
+  {about}
+  </about>
+
+  <entities>
+  {entities}
+  </entities>
+
+  <facts>
+  {facts}
+  </facts>
+
+rag_instructions: |
+  A search index keeps a short list of facts per document instead of the full text. You
+  check whether those facts keep what a benchmark question needs.
+
+  You get the question, its reference answer, its gold facts (what a complete answer must
+  contain), the full document(s) the answer comes from, and the extracted facts of those
+  documents.
+
+  For every numbered gold fact give:
+
+  - in_document: true if the documents state it (in any wording), false if they don't.
+  - in_extraction: "yes" if the extracted about/entities/facts state it with every specific
+    (number, date, id, name) intact; "partial" if they state part of it or lose a specific;
+    "no" if they don't state it.
+
+  Then say whether the question could be answered from the extracted facts alone:
+  "yes" (fully), "partial" (some of it) or "no". Add a short note on what is missing.
+
+rag_prompt: |
+  <question>
+  {question}
+  </question>
+
+  <reference_answer>
+  {answer}
+  </reference_answer>
+
+  <gold_facts>
+  {gold_facts}
+  </gold_facts>
+
+  {documents}
+
+  {extractions}
+
+compare_instructions: |
+  A small model was trained to extract facts from internal company documents, copying a
+  larger model's labels. You check one of its outputs against the document and against the
+  larger model's label (the reference).
+
+  1. For every numbered OUTPUT fact give one verdict against the document (not the
+     reference; the reference can be incomplete):
+     - supported: the document states it, or it follows directly from what the document
+       states. Paraphrase, shortening and combining two statements are fine.
+     - unsupported: the document does not say it: an added detail, a guess, a generalisation
+       the document doesn't make, or something said by or about a different person than the
+       document says.
+     - contradicted: the document says something different: a wrong number, date, id,
+       version, name, owner or outcome, or the meaning reversed.
+     Be strict about specifics: one wrong or invented number, date, id or name makes the
+     fact unsupported or contradicted. Be lenient about wording. Add a short note for every
+     fact that is not supported.
+
+  2. For every numbered REFERENCE fact say whether the output keeps it: "yes" if an output
+     fact (or the output's about/entities) states it with every specific intact, "partial"
+     if it states part of it or loses a specific, "no" if not.
+
+compare_prompt: |
+  <document source="{source}" title="{title}">
+  {text}
+  </document>
+
+  <reference>
+  about: {ref_about}
+  facts:
+  {ref_facts}
+  </reference>
+
+  <output>
+  about: {out_about}
+  entities: {out_entities}
+  facts:
+  {out_facts}
+  </output>

@@ -1,0 +1,686 @@
+{
+	"nodes": [
+		{
+			"id": "m_group",
+			"type": "group",
+			"x": -1160,
+			"y": 600,
+			"width": 1060,
+			"height": 1578,
+			"label": "Models we use"
+		},
+		{
+			"id": "n0",
+			"type": "text",
+			"text": "# Semantic search failures: only 52.8% correct\nWe are building a RAG system (search + LLM answer) over **EnterpriseRAG-Bench**: 512k synthetic company documents (Slack, Gmail, Jira, Drive, meeting transcripts…) and 500 test questions.\n\nMost question types score 80–100%. **Semantic questions** (125, paraphrased so they share few words with the document) score only 52.8%. Why?",
+			"x": 0,
+			"y": 0,
+			"width": 520,
+			"height": 412,
+			"color": "6"
+		},
+		{
+			"id": "n1",
+			"type": "text",
+			"text": "## 1 · Diagnose the misses\n**Why:** before fixing anything, find out what goes wrong.\n\n- ✗ **Text fixes.** 115k documents were stored as Python lists; we decoded them and rebuilt the keyword index. Recall stayed at 55.2%: not the cause.\n- **Second judge.** An LLM checks whether the document the answer came from really answers the question. Of 57 wrong answers, 10 are *ambiguous* questions (another document answers too). **46 are real search failures.**\n- **Exact ranks.** Where does the right document land among all 512k? Keyword search (BM25): median rank 446. Vector search (gte embeddings): median 2,334. Both far below the top 5 the LLM reads.",
+			"x": 0,
+			"y": 552,
+			"width": 520,
+			"height": 554,
+			"color": "5"
+		},
+		{
+			"id": "n2",
+			"type": "text",
+			"text": "### ✓ Decision\nThe problem is **finding** the right document, not ranking it.\n\nThe corpus is full of near-duplicates: e.g. five documents about the same GPU deal that differ only in \"8 GPUs vs 48\" or \"1-year vs 3-year term\". Search returns the look-alikes instead.",
+			"x": 600,
+			"y": 552,
+			"width": 520,
+			"height": 308,
+			"color": "4"
+		},
+		{
+			"id": "n3",
+			"type": "text",
+			"text": "## 2 · Embedding fixes\n**Why:** maybe the vectors are too coarse (one vector per 24,000 characters averages the detail away).\n\n**Test setup (\"candidates\"):** for each of the 46 failed questions, take vector search's own top 50 plus the right document (~51 candidates), and see where the right one ranks among them.\n\n- ✗ **Smaller chunks** (4k / 2k / 1k characters): right document in top 10 in 0–1 of 46.\n- **Another model** (jina-v3, 1k chunks): 9 of 46. Better, but partly because the candidates were picked by gte; also non-commercial licence.\n- ✗ **Late chunking** (each chunk sees the whole document): worse in 27 of 46. It blurs the one detail that matters.",
+			"x": 0,
+			"y": 1246,
+			"width": 520,
+			"height": 614,
+			"color": "5"
+		},
+		{
+			"id": "n4",
+			"type": "text",
+			"text": "### ✗ Conclusion\nNot a dilution problem. Text embeddings can't tell near-duplicates apart: the right document and 50 others look equally relevant.",
+			"x": 600,
+			"y": 1246,
+			"width": 520,
+			"height": 188,
+			"color": "4"
+		},
+		{
+			"id": "n5",
+			"type": "text",
+			"text": "## 3 · Reranker\n**Why:** the reranker (a cross-encoder that reads question + document together) is our most precise scorer, but it only sees the top 50 candidates.\n\n- If the right document were among its candidates, it would put it in the **top 5 in 29 of 46** cases.\n- But each document costs ≈ 65 ms to rerank (50 docs ≈ 3.2 s per question). A shorter 2k-character input is 4.6× faster but loses ~7 points of recall.",
+			"x": 0,
+			"y": 2000,
+			"width": 520,
+			"height": 404,
+			"color": "5"
+		},
+		{
+			"id": "n6",
+			"type": "text",
+			"text": "### ✓ Decision\nDon't just widen the reranker's candidate list (too much compute). The fix has to come **before** it: get the right document into the candidates.",
+			"x": 600,
+			"y": 2000,
+			"width": 520,
+			"height": 188,
+			"color": "4"
+		},
+		{
+			"id": "n7",
+			"type": "text",
+			"text": "## 4 · Agents\n**Why:** let an LLM search several times with its own queries instead of one fixed search.\n\n- **Snippet agent:** keyword results come back as short snippets, with a tool to read a full document. Semantic: 52.8% → **60.8%** (cost $7.17 for 125 questions).\n- **Keyword agent + Gemini caching:** caching the conversation start saves money, not time.\n- On **completeness** questions (need several documents): 55% → **70%**.\n\nHelps, but costs per question and still misses the hidden near-duplicates.",
+			"x": 0,
+			"y": 2544,
+			"width": 520,
+			"height": 524,
+			"color": "5"
+		},
+		{
+			"id": "n8",
+			"type": "text",
+			"text": "## 5 · Fact extraction\n**Idea:** the near-duplicates differ in *details* (amounts, people, dates, ids). Extract those details from every document into short facts and index them, so search can match on them.\n\nAt 512k documents an API LLM is too expensive, so: label a sample with a big LLM, then teach a **small local model** to do the same.",
+			"x": 0,
+			"y": 3208,
+			"width": 520,
+			"height": 344,
+			"color": "5"
+		},
+		{
+			"id": "n9",
+			"type": "text",
+			"text": "## 5a · Labels and model\n- ✓ **Labels from DeepSeek V4.1 Flash** (Chinese API, ~25× cheaper than Gemini, terms allow training on its outputs): per document an \"about\" line, up to 20 entities and 12 short facts, as JSON. 3,000 training docs + 2,370 test docs, ≈ $7.\n- ✓ **Small model: Qwen3.5-2B**, fine-tuned with **LoRA** (trains a small add-on, 0.75% of the weights) on a rented RTX 4090: 68 min, **$1.01**.\n- Result: valid JSON on 100% of held-out documents; wording close to DeepSeek's.",
+			"x": 600,
+			"y": 3208,
+			"width": 520,
+			"height": 404,
+			"color": "5"
+		},
+		{
+			"id": "n10",
+			"type": "text",
+			"text": "## 5b · Quality check (LLM judge)\n**Why:** facts that are wrong would send search to the wrong document.\n\nGemini reads the document and checks every extracted fact: supported / not stated / contradicted.\n- **DeepSeek labels: 0.9%** of facts wrong, none invented — slips like the wrong person or a merged clause.\n- **Our fine-tuned model: 2.6%** wrong (3× more), worst on long meeting transcripts (7%).\n- Facts keep 50% of what benchmark answers need — they're short by design.",
+			"x": 1200,
+			"y": 3208,
+			"width": 520,
+			"height": 464,
+			"color": "5"
+		},
+		{
+			"id": "n11",
+			"type": "text",
+			"text": "### ✓ Decisions (8 Nov)\n- DeepSeek labels pass: good enough to train on.\n- Facts are for **search only**; the answer is still read from the full document, so 50% coverage is fine.\n- No 10k label set (API credit nearly used up).",
+			"x": 1800,
+			"y": 3208,
+			"width": 520,
+			"height": 248,
+			"color": "4"
+		},
+		{
+			"id": "n12",
+			"type": "text",
+			"text": "### ? Open (dropped: step 5 stopped)\nIs the fine-tuned model's 2.6% error rate acceptable, or does it need more training data for transcripts?",
+			"x": 1800,
+			"y": 3516,
+			"width": 520,
+			"height": 220,
+			"color": "3"
+		},
+		{
+			"id": "n13",
+			"type": "text",
+			"text": "## 5c · Retrieval pilot\n**Why:** do the facts actually help search? Same candidates as step 2 (46 failed questions), using DeepSeek's facts.\n\n- ✗ **All facts as one vector per document:** right doc in top 10 in 1 of 46. Averaging 12 facts blurs the key one.\n- **One vector per fact:** 12–14 of 46 (gte or MiniLM), better than text vectors… ✗ but never improves on keyword search, at any weight.\n- **Keyword search (BM25) over the facts**, added to today's search: **2 → 20 of 46** in the top 10.",
+			"x": 600,
+			"y": 3796,
+			"width": 520,
+			"height": 434,
+			"color": "5"
+		},
+		{
+			"id": "n14",
+			"type": "text",
+			"text": "## 5d · Cost\nVector indexes must sit in RAM, so size = server bill.\n\n- **BM25 facts field:** +0.5 GB, **≈ $0** extra.\n- **One vector per fact:** 6.7M vectors, +15–50 GB → **+$175–500 per month** on managed Postgres (today ≈ $175–210).",
+			"x": 1200,
+			"y": 3796,
+			"width": 520,
+			"height": 314,
+			"color": "5"
+		},
+		{
+			"id": "n15",
+			"type": "text",
+			"text": "### ✓ Leaning\nAdd the facts as a **keyword (BM25) field**. Don't build a per-fact vector index unless a full test shows a gain keyword search can't get.",
+			"x": 1800,
+			"y": 3796,
+			"width": 520,
+			"height": 188,
+			"color": "4"
+		},
+		{
+			"id": "n16",
+			"type": "text",
+			"text": "### ? Next (not done: step 5 stopped)\n- **Full-index test:** add the facts field to the real index and run all questions. The candidates favour anything that isn't gte, so check we don't lose questions that work today.\n- **Cheap alternatives:** give the reranker the facts instead of a long chunk; embed facts only for the top candidates at query time; tiny binary vectors (≈ 0.65 GB).",
+			"x": 2400,
+			"y": 3796,
+			"width": 520,
+			"height": 370,
+			"color": "3"
+		},
+		{
+			"id": "legend",
+			"type": "text",
+			"text": "**How to read**\n⬇ **Down = progress**: the steps in the order we did them.\n➡ **Right = depth**: what a step found, the decision on it, and where the route ends.\n\n**Legend**\n🟪 problem · 🟦 step\n🟩 decision / conclusion\n🟨 open\n\n**Where a route ends**\n🟥 ⛔ **Dead end**: tried, nothing left to explore\n🟧 ⏸ **Stopped**: could work, but not worth the cost (for now)\n\n✓ chosen · ✗ didn't work",
+			"x": -460,
+			"y": 0,
+			"width": 340,
+			"height": 470
+		},
+		{
+			"id": "end2",
+			"type": "text",
+			"text": "### ⛔ Dead end: nothing left to try\nSmaller chunks, another model and late chunking all failed for the same reason. No embedding variant is left that could separate near-duplicates.\n\n**Reopen only if** a new idea changes *what* gets embedded, not how.",
+			"x": 1200,
+			"y": 1246,
+			"width": 520,
+			"height": 250,
+			"color": "1"
+		},
+		{
+			"id": "end3",
+			"type": "text",
+			"text": "### ⏸ Stopped: too expensive\nReranking more candidates would work (top 5 in 29 of 46), but at ≈ 65 ms per document it costs seconds per question.\n\n**Reopen if** a faster reranker appears, or once another step shrinks the candidate list.",
+			"x": 1200,
+			"y": 2000,
+			"width": 520,
+			"height": 280,
+			"color": "2"
+		},
+		{
+			"id": "end5c",
+			"type": "text",
+			"text": "### ⛔ Dead end: all facts as one vector\nAveraging ~12 facts into one vector blurs the one fact that matters (right doc in top 10 in 1 of 46). Nothing left to tune.",
+			"x": 1200,
+			"y": 4696,
+			"width": 520,
+			"height": 250,
+			"color": "1"
+		},
+		{
+			"id": "end5d",
+			"type": "text",
+			"text": "### ⏸ Stopped: one vector per fact\n6.7M extra vectors, +15–50 GB, **+$175–500 per month**, and it never beat keyword search over the same facts. Not worth the gigabytes or the time (9 Nov).\n\n**Reopen if** a full test shows a gain BM25 can't get.",
+			"x": 1800,
+			"y": 4326,
+			"width": 520,
+			"height": 310,
+			"color": "2"
+		},
+		{
+			"id": "end5",
+			"type": "text",
+			"text": "### ⏸ Stopped: LLM summaries / facts per document (9 Nov)\n- **Not enough gain:** even on the small pilot (the candidates of 46 failed questions), the summaries didn't help search enough to justify the work.\n- **Doesn't scale:** the corpus keeps growing. Every new document needs a summary, and we can't keep guaranteeing the accuracy of the old ones as the model and data change.\n\nA structured taxonomy (step 6) makes this less likely, but doesn't rule it out.\n\n**Reopen if** buckets alone can't separate the near-duplicates.",
+			"x": 3000,
+			"y": 3796,
+			"width": 520,
+			"height": 470,
+			"color": "2"
+		},
+		{
+			"id": "m_t_Sea",
+			"type": "text",
+			"text": "**Search models**",
+			"x": -1140,
+			"y": 620,
+			"width": 500,
+			"height": 50
+		},
+		{
+			"id": "m_gte",
+			"type": "text",
+			"text": "### gte-modernbert-base · embedder\nSemantic search. Alibaba, **149M** params.\n- **768-dim** vectors; reads up to **8,192 tokens**.\n- We store chunks of ~24,000 characters, so ≈ 1 vector per document (512k vectors).\n- ✗ Can't tell near-duplicates apart.",
+			"x": -1140,
+			"y": 680,
+			"width": 500,
+			"height": 278,
+			"color": "5"
+		},
+		{
+			"id": "m_rr",
+			"type": "text",
+			"text": "### gte-reranker-modernbert-base · reranker\nCross-encoder: reads question + document together. **149M** params.\n- Reads **8,192 tokens** (question + document), so it sees whole documents.\n- ≈ **65 ms per document** → 50 candidates ≈ 3.2 s per question.\n- ✓ Top 5 in 29 of 46 failures *if* the right document is among its candidates.",
+			"x": -1140,
+			"y": 988,
+			"width": 500,
+			"height": 376,
+			"color": "5"
+		},
+		{
+			"id": "m_bm25",
+			"type": "text",
+			"text": "### BM25 (bm25s) · keyword search\nNo model: exact word matches, rare words weigh more.\n- ✓ Best single signal on the failures' candidates (top 10 in 31 of 46).\n- ✗ Misses paraphrases (\"step down\" vs \"annealing\").",
+			"x": -1140,
+			"y": 1394,
+			"width": 500,
+			"height": 278,
+			"color": "5"
+		},
+		{
+			"id": "m_minilm",
+			"type": "text",
+			"text": "### all-MiniLM-L6-v2 · small embedder\n**22M** params, **384-dim** vectors, reads **256 tokens** (longer text is cut).\n- Tested in 5c for cheap per-fact vectors: about as good as gte on short facts, half the storage.",
+			"x": -1140,
+			"y": 1702,
+			"width": 500,
+			"height": 248,
+			"color": "5"
+		},
+		{
+			"id": "m_jina",
+			"type": "text",
+			"text": "### jina-embeddings-v3 · tested only\nWith 1k-character chunks: 9 of 46 in the top 10.\n- ✗ Non-commercial licence.",
+			"x": -1140,
+			"y": 1980,
+			"width": 500,
+			"height": 158,
+			"color": "5"
+		},
+		{
+			"id": "m_t_Lan",
+			"type": "text",
+			"text": "**Language models**",
+			"x": -620,
+			"y": 620,
+			"width": 500,
+			"height": 50
+		},
+		{
+			"id": "m_qwen",
+			"type": "text",
+			"text": "### Qwen3.5-2B + LoRA · our small model\nFine-tuned fact extractor (LoRA r16, 3 epochs).\n- Native context **262k tokens**; trained at **4,096** (longer documents cut).\n- ≈ **12 s per document** on the laptop GPU (RTX 2000 Ada, 8 GB).\n- Training: 68 min, **$1.01** on a rented RTX 4090.\n- Valid JSON 100%; **2.6%** of facts wrong.",
+			"x": -620,
+			"y": 680,
+			"width": 500,
+			"height": 338,
+			"color": "4"
+		},
+		{
+			"id": "m_ds",
+			"type": "text",
+			"text": "### DeepSeek V4.1 Flash · label teacher\nWrites the training labels for the small model.\n- ~25× cheaper than Gemini; its terms allow training on outputs.\n- ≈ **$7** for 5,370 documents; **0.9%** of facts wrong.",
+			"x": -620,
+			"y": 1048,
+			"width": 500,
+			"height": 248,
+			"color": "4"
+		},
+		{
+			"id": "m_gem",
+			"type": "text",
+			"text": "### Gemini 3.8 Flash · judge and agents\nChecks labels and outputs; drives the search agents.\n- **$0.75** per M input tokens, **$3.75** per M output.\n- ≈ $0.011 per document judged; snippet agent $7.17 for 125 questions.",
+			"x": -620,
+			"y": 1326,
+			"width": 500,
+			"height": 278,
+			"color": "4"
+		},
+		{
+			"id": "bef2ae1146b17ee9",
+			"type": "text",
+			"text": "## 7 · Evaluation improvement\n**Idea:** Currently evaluation assumes that we one-shot the relevant document, but in real life we can make agent ask follow up questions. The main idea is to add evaluation on the same questions, but allow agent to ask about the details and have details prepared.",
+			"x": 0,
+			"y": 6000,
+			"width": 520,
+			"height": 220,
+			"color": "5"
+		},
+		{
+			"id": "s6",
+			"type": "text",
+			"x": 0,
+			"y": 5086,
+			"width": 520,
+			"height": 244,
+			"color": "5",
+			"text": "## 6 · Wider reranker list + facts\n**Why:** two things helped before: the reranker (when it sees the right document) and BM25 over facts. Test them together.\n\nBoth tests are free and local, on the 46 failures."
+		},
+		{
+			"id": "s6a",
+			"type": "text",
+			"x": 600,
+			"y": 5086,
+			"width": 520,
+			"height": 348,
+			"color": "5",
+			"text": "## 6a · How deep must the reranker read?\nToday's search over all 512k documents, but kept 1,000 deep instead of 50. Failures where the right document is in the list:\n- 50 (today): **8** of 46\n- 100: 14 · 300: **22** · 1,000: **30**\n\n✗ 16 failures never show up, even at 1,000."
+		},
+		{
+			"id": "s6b",
+			"type": "text",
+			"x": 1200,
+			"y": 5086,
+			"width": 520,
+			"height": 470,
+			"color": "5",
+			"text": "## 6b · Reranker on the candidates\nRight document among its ~51 candidates, 46 questions. Recall@5 = found in the top 5.\n- ✓ **Reranker on full text:** recall@5 **54%** (25 found, 21 missed), recall@10 72%. 59 ms per document.\n- ✓ **Reranker on facts only:** recall@5 **54%** (25 / 21), recall@10 61%. **11 ms** per document, 5× faster.\n- ✗ **+ BM25 facts:** recall@5 54–59%, fewer at rank 1. Adds little once the reranker runs.\n- BM25 text alone: recall@5 43%."
+		},
+		{
+			"id": "s6c",
+			"type": "text",
+			"x": 1800,
+			"y": 5086,
+			"width": 520,
+			"height": 328,
+			"color": "4",
+			"text": "### ✓ Conclusions (9 Nov)\n- The bottleneck is **getting into the list**, not ranking inside it.\n- BM25 over facts doesn't add to the reranker.\n- Facts make deep reranking affordable: 300 fact blocks ≈ 3.3 s per question, about today's cost for 50 full documents.\n- Rough estimate: **52.8% → about 61–62%** semantic (not measured)."
+		},
+		{
+			"id": "s6d",
+			"type": "text",
+			"x": 2400,
+			"y": 5086,
+			"width": 520,
+			"height": 684,
+			"color": "5",
+			"text": "## 6c · End-to-end test (9 Nov)\n**Why:** check the 61–62% estimate with real search instead of the candidates.\nToday's hybrid search, 300 deep, then the reranker over all 300. Only 20% of these documents have facts; the rest use their first 2k characters. 46 failures:\n- In the fused 300: **20** (at 50: 7).\n- ✓ **Full text @300:** recall@5 **20%** (9), recall@10 22%. **~20 s** per question.\n- ✗ **Facts / 2k @300:** recall@5 11% (5), recall@10 20%. ~4.7 s.\n- ✗ Full text @50 (today's depth): recall@5 4% (2), ~3.8 s.\n- ✗ Text + facts (RRF): recall@5 17%.\n- In the list but not top 5: rank 6–139, median 24. A deeper list holds more near-duplicates.\n- None of today's top-5 hits lost. Passing questions not tested.\n→ semantic at most **52.8% → 60.0%** (full text), 56.8% (facts). Estimate was too optimistic."
+		},
+		{
+			"id": "s6b_llm",
+			"type": "text",
+			"text": "## 6b′ · LLM reranker on fact blocks (idea)\n**Idea:** instead of gte-reranker, give an LLM (Gemini 3.8 Flash) the question and all fact blocks and let it return the top 10.\n\n- Fact blocks are short: **~438 tokens** per document vs ~1,500 full text → **~23k tokens** per question for ~53 candidates (~80k full text).\n- ✗ **LLM price:** ~**$0.019** per question on facts ($2.3 per 125 questions, ~$19 per 1,000); full text ~$0.061; 300 fact blocks ~$0.10.\n- ✓ **Dedicated GPU (L4, ~$580/month):** ~$0.00007 per question at full load, **~250× cheaper**; break-even with the LLM at ~1k questions/day. Serverless GPU ~$0.00008 per question.\n- The reranker already runs on a GPU today, so on facts it costs nothing extra; the LLM is a new cost, slower (est. 2–5 s vs 0.3–0.6 s) and its quality is untested.\n(GPU prices approximate, not checked; LLM quality not measured.)",
+			"x": 1800,
+			"y": 6308,
+			"width": 520,
+			"height": 728,
+			"color": "5"
+		},
+		{
+			"id": "end6b_llm",
+			"type": "text",
+			"text": "### ⏸ Stopped: LLM reranker not financially viable (9 Nov)\nAn LLM reranker adds ~$0.019 per question on top of a GPU we already pay for, ~250× the GPU's cost per question, with no measured quality gain. It also needs facts for every document (step 5 stopped).\n\n**Reopen if** a test on the 46 failures (~$0.90) shows an LLM ranks near-duplicates clearly better than gte-reranker (recall@5 54%), or LLM prices drop ~10×.",
+			"x": 2400,
+			"y": 6308,
+			"width": 520,
+			"height": 386,
+			"color": "2"
+		},
+		{
+			"id": "end6c",
+			"type": "text",
+			"text": "### ⏸ Stopped: deeper reranker list (9 Nov)\n+9 of 125 semantic at best, at ~20 s per question (full text); facts give only +5 and need facts for every document. The snippet agent already reaches 60.8%.\n\n**Reopen if** a routing step shrinks the list so the right document is in a short list, or a much faster reranker appears.",
+			"x": 3000,
+			"y": 5086,
+			"width": 520,
+			"height": 356,
+			"color": "2"
+		},
+		{
+			"id": "s6e_next",
+			"type": "text",
+			"text": "### ? Next\n- **Routing** for the **26** failures that aren't in the fused 300: keywords / buckets, see the **document growth** map.\n- Check that a deeper list doesn't hurt the questions that pass today.",
+			"x": 3000,
+			"y": 5502,
+			"width": 520,
+			"height": 228,
+			"color": "3"
+		},
+		{
+			"id": "s6d_trunc",
+			"type": "text",
+			"text": "## 6d · Rerank on the first N tokens (9 Nov)\n**Why:** is the facts' 5× speed-up the extraction, or just shorter input? Cut each document to its first N tokens, no model.\nCandidates (recall@5 / @10, ms per doc):\n- full text 54% / 72%, 58.5 ms · facts 54% / 61%, 11.4 ms\n- ✗ first 256: 43% / 50%, 5.9 ms\n- first 512: 52% / 57%, 11.8 ms (≈ facts)\n- ✓ **first 1,024: 59% / 70%, 26 ms**\nEnd to end, 300 deep: first 1,024 = full text (recall@5 20%) at 27 vs 66 ms per doc.",
+			"x": 3000,
+			"y": 5790,
+			"width": 520,
+			"height": 458,
+			"color": "5"
+		},
+		{
+			"id": "s6d_trunc_dec",
+			"type": "text",
+			"text": "### ✓ Decision (9 Nov)\nFor reranker speed, **cut to the first 1,024 tokens**: full-text quality at ~2.3× the speed (50 docs: ~3.1 s → ~1.3 s), no model, nothing goes stale. Facts are no longer needed for speed. Not switched on yet; use when latency is needed (agents, deeper lists).",
+			"x": 3600,
+			"y": 5790,
+			"width": 520,
+			"height": 258,
+			"color": "4"
+		}
+	],
+	"edges": [
+		{
+			"id": "e_n4_end2",
+			"fromNode": "n4",
+			"fromSide": "right",
+			"toNode": "end2",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n6_end3",
+			"fromNode": "n6",
+			"fromSide": "right",
+			"toNode": "end3",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n13_end5c",
+			"fromNode": "n13",
+			"fromSide": "right",
+			"toNode": "end5c",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n14_end5d",
+			"fromNode": "n14",
+			"fromSide": "right",
+			"toNode": "end5d",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n0_n1",
+			"fromNode": "n0",
+			"fromSide": "bottom",
+			"toNode": "n1",
+			"toSide": "top"
+		},
+		{
+			"id": "e_n1_n2",
+			"fromNode": "n1",
+			"fromSide": "right",
+			"toNode": "n2",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n1_n3",
+			"fromNode": "n1",
+			"fromSide": "bottom",
+			"toNode": "n3",
+			"toSide": "top"
+		},
+		{
+			"id": "e_n3_n4",
+			"fromNode": "n3",
+			"fromSide": "right",
+			"toNode": "n4",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n3_n5",
+			"fromNode": "n3",
+			"fromSide": "bottom",
+			"toNode": "n5",
+			"toSide": "top"
+		},
+		{
+			"id": "e_n5_n6",
+			"fromNode": "n5",
+			"fromSide": "right",
+			"toNode": "n6",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n5_n7",
+			"fromNode": "n5",
+			"fromSide": "bottom",
+			"toNode": "n7",
+			"toSide": "top"
+		},
+		{
+			"id": "e_n7_n8",
+			"fromNode": "n7",
+			"fromSide": "bottom",
+			"toNode": "n8",
+			"toSide": "top"
+		},
+		{
+			"id": "e_n8_n9",
+			"fromNode": "n8",
+			"fromSide": "right",
+			"toNode": "n9",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n9_n10",
+			"fromNode": "n9",
+			"fromSide": "right",
+			"toNode": "n10",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n10_n11",
+			"fromNode": "n10",
+			"fromSide": "right",
+			"toNode": "n11",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n10_n12",
+			"fromNode": "n10",
+			"fromSide": "right",
+			"toNode": "n12",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n8_n13",
+			"fromNode": "n8",
+			"fromSide": "right",
+			"toNode": "n13",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n13_n14",
+			"fromNode": "n13",
+			"fromSide": "right",
+			"toNode": "n14",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n14_n15",
+			"fromNode": "n14",
+			"fromSide": "right",
+			"toNode": "n15",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n15_n16",
+			"fromNode": "n15",
+			"fromSide": "right",
+			"toNode": "n16",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n16_end5",
+			"fromNode": "n16",
+			"fromSide": "right",
+			"toNode": "end5",
+			"toSide": "left"
+		},
+		{
+			"id": "e_n8_s6",
+			"fromNode": "n8",
+			"fromSide": "bottom",
+			"toNode": "s6",
+			"toSide": "top"
+		},
+		{
+			"id": "e_s6_s6a",
+			"fromNode": "s6",
+			"fromSide": "right",
+			"toNode": "s6a",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s6a_s6b",
+			"fromNode": "s6a",
+			"fromSide": "right",
+			"toNode": "s6b",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s6b_s6c",
+			"fromNode": "s6b",
+			"fromSide": "right",
+			"toNode": "s6c",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s6c_s6d",
+			"fromNode": "s6c",
+			"fromSide": "right",
+			"toNode": "s6d",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s6b_s6b_llm",
+			"fromNode": "s6b",
+			"fromSide": "right",
+			"toNode": "s6b_llm",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s6b_llm_end",
+			"fromNode": "s6b_llm",
+			"fromSide": "right",
+			"toNode": "end6b_llm",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s6d_end6c",
+			"fromNode": "s6d",
+			"fromSide": "right",
+			"toNode": "end6c",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s6d_next",
+			"fromNode": "s6d",
+			"fromSide": "right",
+			"toNode": "s6e_next",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s6d_trunc",
+			"fromNode": "s6d",
+			"fromSide": "right",
+			"toNode": "s6d_trunc",
+			"toSide": "left"
+		},
+		{
+			"id": "e_trunc_dec",
+			"fromNode": "s6d_trunc",
+			"fromSide": "right",
+			"toNode": "s6d_trunc_dec",
+			"toSide": "left"
+		}
+	]
+}

@@ -1,0 +1,90 @@
+{
+  "id": "DL", "kind": "module", "label": "Download & import",
+  "summary": "Downloads EnterpriseRAG-Bench from Hugging Face and loads its 512K documents and 500 questions into Postgres.",
+  "details": "Produces the `documents` and `questions` Postgres tables that every later module (parsing, indexing, retrieval, evaluation) reads from. It is the first step of the pipeline and is run once per machine.\n\nFlow:\n- `download_dataset` pulls the dataset card and parquet files from Hugging Face into `data/enterprise_rag_bench`.\n- `EnterpriseRagBenchLoader.load` reads `data/documents/test.parquet` and `data/questions/test.parquet` into a `Corpus` of `Artifact` and `Question` models.\n- `import_corpus` converts them to `DocumentRecord` and `QuestionRecord` rows, creates the tables, and inserts through the repository layer in batches of 2000.\n- It prints per-source document counts and the question count as a sanity check.\n\nCommands are `train-rag download`, `import-db` and `setup` (both), wired in `main.py`. Read `import_db.py` first, then the loader.",
+  "command": "train-rag download | import-db | setup",
+  "symbols": ["import_corpus", "download_dataset", "EnterpriseRagBenchLoader", "DataLoader"],
+  "children": [
+    {"id": "DL.B", "kind": "base", "label": "DataLoader",
+     "summary": "ABC that turns any data source into a normalized Corpus.",
+     "details": "The contract is one abstract method, `load() -> Corpus`, plus a class attribute `name` that identifies the dataset.\n\nThe `name` is stored as the `dataset` column on every row, so several datasets can share the same tables. A new variant must set `name` and implement `load()`; it owns all knowledge of where the data lives and how it is shaped, and returns `Artifact` and `Question` models. Nothing downstream of the loader sees the raw format.",
+     "symbols": ["DataLoader", "DataLoader.load"],
+     "children": [
+       {"id": "DL.B.F1", "kind": "file", "label": "data_loaders/base.py", "path": "src/train_rag/data_loaders/base.py", "summary": "DataLoader ABC with abstract load() returning a Corpus.",
+        "symbols": ["DataLoader", "DataLoader.load"]},
+       {"id": "DL.B.N1", "kind": "note", "note_kind": "pattern", "label": "Strategy loader",
+        "summary": "Importers depend only on Corpus, so a new dataset needs just a new DataLoader subclass.",
+        "details": "Strategy pattern. `base.py` says it directly: \"the rest of the pipeline only ever sees `Corpus`\". `import_corpus` in `import_db.py` calls `loader.load()` and then uses `loader.name` and `corpus.artifacts` / `corpus.questions`, never parquet or Hugging Face types. Today only `EnterpriseRagBenchLoader` exists, and `import_corpus` instantiates it directly, so swapping the dataset still needs a small edit there."}
+     ]},
+    {"id": "DL.V1", "kind": "variant", "label": "EnterpriseRagBenchLoader",
+     "summary": "Reads documents and questions from local parquet files, optionally filtered by source.",
+     "details": "The only `DataLoader` subclass, with `name = \"enterprise_rag_bench\"`. The constructor takes `data_dir` and an optional list of `SourceType`s.\n\n- `load_artifacts` reads `data/documents/test.parquet` with pyarrow, appends a `row_index` column (0-based position in the file), filters on `source_type` when `source_types` is set, and builds one `Artifact` per row from `doc_id`, `source_type`, `title` and `content`.\n- `load_questions` reads `data/questions/test.parquet` into `Question` models (gold answer, answer facts, expected doc ids). Questions are never filtered by source.\n- `resolve` raises `FileNotFoundError` with a hint to run `train-rag download` when a file is missing.\n\nThe row_index is taken before filtering, so it always points at the original parquet row. The full table is loaded through `to_pylist`, which is fine for the benchmark's size.",
+     "symbols": ["EnterpriseRagBenchLoader", "EnterpriseRagBenchLoader.load_artifacts", "EnterpriseRagBenchLoader.load_questions", "EnterpriseRagBenchLoader.resolve"],
+     "children": [
+       {"id": "DL.V1.F1", "kind": "file", "label": "data_loaders/enterprise_rag_bench.py", "path": "src/train_rag/data_loaders/enterprise_rag_bench.py", "summary": "EnterpriseRagBenchLoader; stamps each Artifact with source_file and row_index.",
+        "symbols": ["EnterpriseRagBenchLoader", "DOCUMENTS_FILE", "QUESTIONS_FILE"]},
+       {"id": "DL.V1.N1", "kind": "note", "note_kind": "why", "label": "Provenance on every row",
+        "summary": "row_index and source_file let each Postgres row be traced back to its parquet row.",
+        "details": "Each `Artifact` gets `source_file=\"data/documents/test.parquet\"` and `row_index`, computed before any source filter. `DocumentRecord` has a unique constraint on (`dataset`, `source_file`, `row_index`), which is what makes reruns idempotent. It is also needed because `doc_id` is not unique in the dataset (four ids appear twice), so origin is the only reliable identity."}
+     ]},
+    {"id": "DL.G1", "kind": "group", "label": "Files",
+     "summary": "Download step and the Postgres import step.",
+     "details": "The two top-level scripts of the module. `download.py` is network-only and touches no database; `import_db.py` is database-only and reads the local files through the loader. They are separate so each can be rerun alone.",
+     "children": [
+       {"id": "DL.G1.F1", "kind": "file", "label": "download.py", "path": "src/train_rag/download.py", "summary": "download_dataset: snapshot_download of README and data/* only.",
+        "details": "`download_dataset(data_dir)` calls `huggingface_hub.snapshot_download` on repo `onyx-dot-app/EnterpriseRAG-Bench` (repo_type dataset) with `allow_patterns=[\"README.md\", \"data/*\"]` and returns the local directory. The default target is `data/enterprise_rag_bench` (`DEFAULT_DATA_DIR`). Hugging Face skips files already present, so rerunning is cheap.",
+        "symbols": ["download_dataset", "DATASET_REPO_ID", "DEFAULT_DATA_DIR"],
+        "children": [
+          {"id": "DL.G1.F1.N1", "kind": "note", "note_kind": "why", "label": "Parquet only", "summary": "Only the card and parquet files are pulled, the rest of the repo is not needed.",
+           "details": "`allow_patterns=[\"README.md\", \"data/*\"]` limits the download to the dataset card and the `data/documents` and `data/questions` parquet files that the loader reads. Anything else in the Hugging Face repo is skipped."}
+        ]},
+       {"id": "DL.G1.F2", "kind": "file", "label": "import_db.py", "path": "src/train_rag/import_db.py", "summary": "import_corpus: converts to records and inserts in batches of 2000.",
+        "details": "- `import_corpus(data_dir)`: runs the loader, opens the engine, calls `create_tables`, imports documents, then questions, commits, and prints counts.\n- `import_dataset`: splits artifacts with `itertools.batched` into `BATCH_SIZE = 2000`, inserts each batch and commits it.\n- `to_document_record`: builds a `DocumentRecord`, adding `char_count`, `byte_size` and the provenance fields; raises `ValueError` if `source_file` or `row_index` is missing.\n- `to_question_record`: maps a `Question` to `QuestionRecord`, turning enums into strings.\n- `escape_nul`: applied to title and content. `char_count` is measured on the original text.",
+        "symbols": ["import_corpus", "import_dataset", "to_document_record", "to_question_record", "escape_nul"],
+        "children": [
+          {"id": "DL.G1.F2.N1", "kind": "note", "note_kind": "why", "label": "Rerunnable import",
+           "summary": "Batched commits with on-conflict-do-nothing inserts let an interrupted import be rerun safely.",
+           "details": "`insert_documents` uses Postgres `INSERT ... ON CONFLICT DO NOTHING` on (`dataset`, `source_file`, `row_index`), and `insert_questions` does the same on the question `id`. Each batch of 2000 is committed on its own, so a crash loses at most one batch and a rerun skips what is already stored and fills in the rest."},
+          {"id": "DL.G1.F2.N2", "kind": "note", "note_kind": "style", "label": "NUL escaping",
+           "summary": "NUL characters are written as the visible text \\x00 because Postgres text cannot store them.",
+           "details": "`escape_nul` replaces \"\\x00\" with the four visible characters `\\x00`. Its docstring gives the reason for escaping instead of deleting: a few documents mention a NUL delimiter literally, so the escape keeps their meaning. Only title and content are escaped; question text is not."}
+        ]}
+     ]},
+    {"id": "DL.G2", "kind": "group", "label": "Also uses",
+     "summary": "Models, tables and repositories the import writes through.",
+     "details": "Shared code owned by other modules. The import converts the loader's pydantic models (`models/`) into SQLModel rows (`tables/`) and writes them only through the `repository/` functions, never with raw SQL of its own. The same tables and repository functions are read by the parsing, indexing and evaluation modules.",
+     "children": [
+       {"id": "DL.G2.U1", "kind": "file", "side": true, "label": "models/corpus.py", "path": "src/train_rag/models/corpus.py", "summary": "Corpus and Artifact pydantic models.",
+        "details": "`Corpus` holds `source` (the dataset name), a list of `Artifact` and a list of `Question`. It is the single return type of every `DataLoader`.",
+        "symbols": ["Corpus"]},
+       {"id": "DL.G2.U2", "kind": "file", "side": true, "label": "models/question.py", "path": "src/train_rag/models/question.py", "summary": "Question model.",
+        "details": "`Question` carries `text`, `gold_answer`, `answer_facts`, `source_types` and `expected_doc_ids`. `QuestionType` is a StrEnum of ten benchmark categories, and the `answerable` property is False only for `info_not_found`.",
+        "symbols": ["Question", "QuestionType"]},
+       {"id": "DL.G2.U3", "kind": "file", "side": true, "label": "tables/document.py", "path": "src/train_rag/tables/document.py", "summary": "DocumentRecord table.",
+        "details": "Table `documents`. Columns: `doc_id`, `dataset`, `source_type` (all indexed), `title` and `content` as Text, `char_count`, `byte_size`, `source_file`, `row_index` and a UTC `loaded_at`. The surrogate integer `id` is what later modules link to. A unique constraint on (`dataset`, `source_file`, `row_index`) identifies a row.",
+        "symbols": ["DocumentRecord"],
+        "children": [
+          {"id": "DL.G2.U3.N1", "kind": "note", "note_kind": "why", "label": "doc_id is not the key",
+           "summary": "Four doc_ids appear twice, so rows are identified by source file and row, not by doc_id.",
+           "details": "The article found that four `doc_id` values are shared by two documents each, and three of those pairs are different documents on the same topic, so merging would lose content. The table therefore keeps every row, uses a surrogate `id`, and puts the unique constraint on (`dataset`, `source_file`, `row_index`). The `DocumentRecord` docstring says the same.",
+           "doc": "docs/articles/001_data_exploration_and_parsing.md"}
+        ]},
+       {"id": "DL.G2.U4", "kind": "file", "side": true, "label": "tables/question.py", "path": "src/train_rag/tables/question.py", "summary": "QuestionRecord table.",
+        "details": "Table `questions`, primary key is the dataset question `id`. `answer_facts`, `source_types` and `expected_doc_ids` are stored as JSONB lists.",
+        "symbols": ["QuestionRecord"]},
+       {"id": "DL.G2.U5", "kind": "file", "side": true, "label": "repository/document.py", "path": "src/train_rag/repository/document.py", "summary": "insert_documents and per-source counts.",
+        "details": "The import uses `insert_documents` (bulk insert with on-conflict-do-nothing on the provenance columns, `id` excluded so Postgres assigns it) and `count_documents_by_source`. The file also holds many read helpers used by other modules, such as `load_artifacts`, `sample_document_ids` and `document_sizes`.",
+        "symbols": ["insert_documents", "count_documents_by_source", "load_artifacts", "to_artifact"]},
+       {"id": "DL.G2.U6", "kind": "file", "side": true, "label": "repository/question.py", "path": "src/train_rag/repository/question.py", "summary": "insert_questions and question counts.",
+        "details": "The import uses `insert_questions` (on-conflict-do-nothing on `id`) and `count_questions`. `load_questions` and `to_question` read them back as `Question` models, optionally by type, for evaluation.",
+        "symbols": ["insert_questions", "count_questions", "load_questions", "to_question"]}
+     ]},
+    {"id": "DL.N1", "kind": "note", "note_kind": "why", "label": "Corpus goes to Postgres first",
+     "summary": "Documents live in Postgres so later steps query them instead of rereading parquet.",
+     "details": "The article says: \"I put the whole corpus into Postgres first, with each document's source, size and origin. That way every later step can query it, instead of me rereading parquet files.\" The corpus is 511,962 documents from nine tools plus 500 questions. Storing `char_count`, `byte_size`, `source_type` and provenance at import time lets size analysis run as SQL and lets parsed documents link back to their raw row.",
+     "doc": "docs/articles/001_data_exploration_and_parsing.md"},
+    {"id": "DL.N2", "kind": "note", "note_kind": "pattern", "label": "setup = download + import",
+     "summary": "main.py runs setup as download then import-db, sharing both steps with their own commands.",
+     "details": "In `main.py`, `if args.command in (\"download\", \"setup\")` runs `download_dataset`, and the next `if args.command in (\"import-db\", \"setup\")` runs `import_corpus`. Both read the same `--data-dir`. So `setup` has no code of its own: it is the two steps in sequence."}
+  ]
+}

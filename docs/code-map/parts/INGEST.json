@@ -1,0 +1,233 @@
+{
+  "id": "INGEST",
+  "kind": "module",
+  "label": "Chunk, embed, index",
+  "summary": "Turns documents into chunks, vectors and a BM25 keyword index that retrieval searches.",
+  "command": "train-rag ingest | index-summaries | index-bm25",
+  "children": [
+    {
+      "id": "INGEST.B",
+      "kind": "base",
+      "label": "Embedder",
+      "summary": "ABC that turns texts into normalized vectors; model classes are interchangeable.",
+      "children": [
+        {
+          "id": "INGEST.B.F1",
+          "kind": "file",
+          "label": "embedder.py",
+          "path": "src/train_rag/embedder.py",
+          "summary": "Embedder ABC, MiniLM and gte-modernbert implementations, EMBEDDERS registry.",
+          "details": "- `MiniLmEmbedder`: all-MiniLM-L6-v2, 384 dimensions, reads 256 tokens, batch 128.\n- `GteModernBertEmbedder`: gte-modernbert-base, 768 dimensions, reads 8,192 tokens, runs in float16 with batch 4 and casts vectors back to float32.\n- `EMBEDDERS`: maps the CLI names `minilm` and `gte` to the classes.",
+          "symbols": [
+            "Embedder",
+            "MiniLmEmbedder",
+            "GteModernBertEmbedder",
+            "EMBEDDERS"
+          ]
+        },
+        {
+          "id": "INGEST.B.N1",
+          "kind": "note",
+          "note_kind": "pattern",
+          "label": "Strategy + registry",
+          "summary": "Pipelines take any Embedder; EMBEDDERS maps CLI names (minilm, gte) to classes, and dimensions pick the table set.",
+          "details": "Pipelines (`run_data_ingestion`, `index_summaries`) take any `Embedder` and never name a model. `EMBEDDERS` in `embedder.py` maps the CLI names `minilm` and `gte` to classes. The embedder's `name` picks the chunker in `CHUNKERS`, and its `dimensions` picks the table set in `EMBEDDING_TABLES` (384 -> `embeddings`, 768 -> `embeddings_768`), so switching models switches size, tables and chunk length together."
+        }
+      ],
+      "details": "Contract: an `Embedder` has class-level `name`, `dimensions` and `max_tokens`, and one method `embed(texts) -> list[list[float]]` returning one unit-length vector per text, in order. Unit length means cosine distance ranks results.\n\nA new model needs those three attributes, an `embed` that normalizes, an entry in `EMBEDDERS`, and a matching vector size in `tables/embedding.py` and a chunk size in `CHUNKERS` of the ingestion pipeline.",
+      "symbols": [
+        "Embedder",
+        "Embedder.embed"
+      ]
+    },
+    {
+      "id": "INGEST.V1",
+      "kind": "variant",
+      "label": "Chunk pipeline",
+      "summary": "Resumable batch pipeline: load, parse, normalize, chunk, embed, store per document.",
+      "children": [
+        {
+          "id": "INGEST.V1.F1",
+          "kind": "file",
+          "label": "data_ingestion.py",
+          "path": "src/train_rag/pipelines/data_ingestion.py",
+          "summary": "run_data_ingestion: plans pending documents and commits each batch of 500.",
+          "details": "`run_data_ingestion` plans the pending documents per source type (`pending_documents`), then loops batches through the six steps. `CHUNKERS` holds a `RecursiveChunker` per model name. `forget_list_documents` deletes chunks of documents stored as a list literal so they become pending and are re-embedded from decoded text.",
+          "symbols": [
+            "run_data_ingestion",
+            "CHUNKERS",
+            "forget_list_documents"
+          ]
+        },
+        {
+          "id": "INGEST.V1.F2",
+          "kind": "file",
+          "label": "chunking.py",
+          "path": "src/train_rag/processing/chunking.py",
+          "summary": "RecursiveChunker cuts at paragraph, line, sentence, word, adding neighbour context.",
+          "details": "`RecursiveChunker.split` cuts text at `SEPARATORS` (paragraph, line, sentence, space), recursing into pieces over `size`, and `merge` joins neighbours back up to `size`; a piece with no break left is cut hard at `size`. `chunks` prepends the title and adds `context` characters from the previous chunk's tail and next chunk's head (`tail`, `head`, cut at word boundaries). `chunk_documents` wraps the texts as `Chunk` models with a `position`.",
+          "symbols": [
+            "RecursiveChunker",
+            "RecursiveChunker.chunks",
+            "chunk_documents",
+            "merge"
+          ]
+        },
+        {
+          "id": "INGEST.V1.N1",
+          "kind": "note",
+          "note_kind": "why",
+          "label": "Chunk size per model",
+          "summary": "MiniLM reads 256 tokens so chunks are 600 chars; gte reads 8,192 so most documents stay whole.",
+          "details": "`CHUNKERS` in `data_ingestion.py` comments: sizes are in characters at about 3.7 characters per token. MiniLM reads 256 word pieces, so `RecursiveChunker(size=600, context=100)`: 600 characters plus 100 of context each side and the title fit in 95% of chunks. gte-modernbert reads 8,192 tokens, so `size=24_000, context=500` keeps most documents whole."
+        },
+        {
+          "id": "INGEST.V1.N2",
+          "kind": "note",
+          "note_kind": "pattern",
+          "label": "Resume by absence",
+          "summary": "A document with chunks from the model counts as done, so a stopped run just restarts; the vector index is dropped during load and rebuilt after.",
+          "doc": "docs/brainstorm/001_injection.md",
+          "details": "`pending_documents` returns documents with no rows for this model and field (`embedded_document_ids`), so a document is done once any chunk is stored. Each batch is stored and committed together, so a stop loses at most one batch and a rerun just plans what is left. The vector index is dropped per source before loading and rebuilt after (`drop_vector_index`, `create_vector_index`), so a large load does not update the index row by row."
+        }
+      ],
+      "details": "The main path: documents are processed per source type in batches of `DOCUMENT_BATCH = 500`, each batch committed in one transaction.\n\nSteps per batch: `load_documents`, `parse_documents` (parsed fields upserted to `parsed_documents`), `normalize_documents`, `chunk_documents`, `embedder.embed`, `store_chunks`. Before the first batch of a source the vector index is dropped; after its last batch `create_vector_index` rebuilds the StreamingDiskANN index.\n\nOptions: `sample` limits to the test sample (cited documents plus N distractors), `fresh` deletes the model's chunks first, `redo_lists` re-embeds documents stored as list literals. Progress is recorded for `train-rag progress-page`.",
+      "symbols": [
+        "run_data_ingestion",
+        "CHUNKERS",
+        "forget_list_documents"
+      ]
+    },
+    {
+      "id": "INGEST.V2",
+      "kind": "variant",
+      "label": "Summary index",
+      "summary": "Embeds summaries the documents already carry instead of chunking them.",
+      "children": [
+        {
+          "id": "INGEST.V2.F1",
+          "kind": "file",
+          "label": "index_summaries.py",
+          "path": "src/train_rag/index_summaries.py",
+          "summary": "index_summaries: embeds Fireflies, GitHub and Jira free summaries under field summary.",
+          "details": "`index_summaries` loops `FREE_SUMMARIES` (source type -> parsed attribute name), builds table records with `field='summary'` and position 0, and replaces the model's old rows. Prints counts and seconds per source.",
+          "symbols": [
+            "index_summaries",
+            "FREE_SUMMARIES"
+          ]
+        },
+        {
+          "id": "INGEST.V2.N1",
+          "kind": "note",
+          "note_kind": "why",
+          "label": "Cheap first iteration",
+          "summary": "The first iteration favours searching summaries over chunking every document; free summaries cost no LLM.",
+          "doc": "docs/brainstorm/001_injection.md",
+          "details": "The brainstorm doc proposes searching summaries first rather than chunking every document; the summaries already exist in the parsed fields, so this index costs only embedding time and no LLM calls."
+        }
+      ],
+      "details": "Skips chunking: for Fireflies (`summary`), GitHub (`description`) and Jira (`issue_summary`) the parser's free summary field is embedded as one text per document under field `summary`. Other sources have no such field and are skipped. Defaults to `MiniLmEmbedder`.\n\nPer source: parse each artifact, collect (document id, doc id, summary), embed all at once, `replace_embeddings` for that model and field, then `create_vector_index`. Retrieval can search the `summary` field instead of `chunk`.",
+      "symbols": [
+        "index_summaries",
+        "FREE_SUMMARIES"
+      ]
+    },
+    {
+      "id": "INGEST.V3",
+      "kind": "variant",
+      "label": "BM25 index",
+      "summary": "Keyword index over whole documents, saved to disk instead of the database.",
+      "children": [
+        {
+          "id": "INGEST.V3.F1",
+          "kind": "file",
+          "label": "index_bm25.py",
+          "path": "src/train_rag/index_bm25.py",
+          "summary": "index_bm25: stemmed bm25s index plus documents.json, per all or sample folder.",
+          "details": "`index_bm25` tokenizes per source and batch, builds the vocabulary and corpus, calls `model.index((corpus, vocabulary))` and saves. `tokenize` wraps `bm25s.tokenize`. `bm25_index_dir` names the output folder by sample.",
+          "symbols": [
+            "index_bm25",
+            "tokenize",
+            "bm25_index_dir"
+          ]
+        },
+        {
+          "id": "INGEST.V3.N1",
+          "kind": "note",
+          "note_kind": "why",
+          "label": "Words as int ids",
+          "summary": "Tokens are stored as ids in compact arrays because about 300M words as strings would not fit in memory.",
+          "details": "In `index_bm25`, a comment says the corpus (about 300M words) would not fit in memory as Python strings. Each word is mapped to an int id via `vocabulary.setdefault(word, len(vocabulary))` and each document stored as an `array('i')`; bm25s accepts the `(corpus, vocabulary)` pair directly."
+        }
+      ],
+      "details": "A lexical alternative to the vector tables. Each document's normalized title plus content is tokenized (lowercase, English stopwords removed, Snowball-stemmed via `Stemmer`) and indexed with `bm25s`. Output goes to `data/bm25/all` or `data/bm25/sample_<n>`: the bm25s files plus `documents.json`, a list of `IndexedDocument` (document id, doc id, source type) in index order so hits map back to documents.\n\nDocuments load in batches of 5,000 per source type. Whole documents are indexed, not chunks.",
+      "symbols": [
+        "index_bm25",
+        "bm25_index_dir",
+        "tokenize"
+      ]
+    },
+    {
+      "id": "INGEST.G2",
+      "kind": "group",
+      "label": "Also uses",
+      "summary": "Chunk model and embedding storage the indexers write through.",
+      "children": [
+        {
+          "id": "INGEST.G2.U1",
+          "kind": "file",
+          "side": true,
+          "label": "models/chunk.py",
+          "path": "src/train_rag/models/chunk.py",
+          "summary": "Chunk and CleanDocument models passed between steps.",
+          "details": "Pydantic models: `CleanDocument` (document_id, doc_id, title, text) leaves normalization; `Chunk` (document_id, doc_id, position, text) leaves chunking.",
+          "symbols": [
+            "CleanDocument",
+            "Chunk"
+          ]
+        },
+        {
+          "id": "INGEST.G2.U2",
+          "kind": "file",
+          "side": true,
+          "label": "tables/embedding.py",
+          "path": "src/train_rag/tables/embedding.py",
+          "summary": "Embedding tables per source type and vector dimension.",
+          "details": "`EmbeddingRecord` has document_id, doc_id, field, position, previous_id, next_id, model, text, embedding. `MiniEmbeddingRecord` is Vector(384), `BaseEmbeddingRecord` Vector(768). `BASES` and `source_table` build one table per source type and size; names are `embeddings` and `embeddings_768`.",
+          "symbols": [
+            "EmbeddingRecord",
+            "source_table",
+            "BASES"
+          ]
+        },
+        {
+          "id": "INGEST.G2.U3",
+          "kind": "file",
+          "side": true,
+          "label": "repository/embedding.py",
+          "path": "src/train_rag/repository/embedding.py",
+          "summary": "Pending-document query, chunk storage and vector index create/drop.",
+          "details": "Write side: `pending_documents`, `store_chunks` (reserves row ids with `reserve_ids`, then `neighbour_ids` fills previous_id/next_id), `replace_embeddings`, `delete_embeddings`, `delete_document_embeddings`, `create_vector_index` (pgvectorscale diskann, cosine) and `drop_vector_index`. Also holds `search_embeddings`, used by retrieval.",
+          "symbols": [
+            "store_chunks",
+            "pending_documents",
+            "create_vector_index",
+            "drop_vector_index",
+            "neighbour_ids"
+          ]
+        }
+      ],
+      "details": "Supporting files the ingestion code writes through: the models passed between steps, the table definitions and the database functions for chunks and vector indexes."
+    },
+    {
+      "id": "INGEST.N1",
+      "kind": "note",
+      "note_kind": "why",
+      "label": "Neighbour context",
+      "summary": "Chunks carry neighbour text so later steps can send a chunk with its neighbours, not whole documents, cutting LLM tokens.",
+      "doc": "docs/articles/002-1_rag_cost_savings.md",
+      "details": "Two kinds of neighbour context exist. Text: `RecursiveChunker.chunks` adds the tail of the previous chunk and the head of the next (100 characters for MiniLM) so a mid-topic chunk still says its topic. Links: `store_chunks` stores `previous_id` and `next_id` per row, so a retrieval step can send a hit with its neighbours instead of the whole document. The cost-savings article argues this cuts LLM tokens."
+    }
+  ],
+  "details": "Produces the searchable data that retrieval reads: embedding rows in Postgres (pgvector tables, one per source type and vector size) and an on-disk BM25 keyword index.\n\nThree entry points, each a CLI command:\n- `train-rag ingest` runs `run_data_ingestion`: load, parse, normalize, chunk, embed, store, in batches of 500 documents.\n- `train-rag index-summaries` embeds the summaries Fireflies, GitHub and Jira documents already carry.\n- `train-rag index-bm25` tokenizes whole documents into a stemmed `bm25s` index under `data/bm25/`.\n\nDocuments come from the `documents` table loaded earlier (EnterpriseRAG-Bench loader); parsing and normalizing reuse the parsers and `processing/normalize.py`. Output goes to the retrieval modules, which search `embeddings` / `embeddings_768` and the BM25 folder.\n\nRead `pipelines/data_ingestion.py` first, then `embedder.py`."
+}
