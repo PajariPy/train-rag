@@ -5,13 +5,18 @@ description = "Agentic RAG over the EnterpriseRAG-Bench company knowledge benchm
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "accelerate>=1.15.0",
     "bm25s>=0.3.16",
+    "datasets>=5.2.0",
     "fastapi>=0.162.0",
     "google-genai>=2.33.0",
     "huggingface-hub>=2.3.0",
     "langchain-core>=1.7.0",
+    "langchain-deepseek>=1.1.1",
+    "langchain-google-genai>=4.4.2",
     "langgraph>=1.2.18",
     "pgvector>=0.5.1",
+    "plotly>=7.1.0",
     "psycopg[binary]>=3.3.6",
     "pyarrow>=26.0.0",
     "pydantic>=2.14.1",
@@ -21,7 +26,9 @@ dependencies = [
     "sentence-transformers>=6.2.0",
     "sqlalchemy[asyncio]>=2.1.6",
     "sqlmodel>=0.0.48",
+    "umap-learn>=0.5.12",
     "uvicorn>=0.54.0",
+    "wandb>=0.31.0",
 ]
 
 [project.scripts]

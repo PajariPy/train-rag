@@ -1,0 +1,93 @@
+{
+  "id": "TRAIN",
+  "kind": "module",
+  "label": "Training data for the embedder",
+  "summary": "Builds synthetic training questions with hard negatives to fine-tune the embedding model.",
+  "details": "Produces about 2,000 train and 400 dev questions, each with its source document as positive and up to 5 hard negatives, so the embedder can be fine-tuned without touching the 500 benchmark questions (kept as a once-only test).\n\nFlow, run through scripts in `exploration/training_questions/` (not files of this module):\n- `sources.py`: picks source documents per type and source using the quotas, excluding the benchmark's right documents and their 20 nearest gte neighbours, dev first.\n- `generate.py`: writes one question per document with DeepSeek via a small LangGraph, using the benchmark's prompts; answers are cleaned with `clean_question`.\n- `mine.py`: searches (gte + BM25, RRF to 50), reranks with the source added, then applies `pick_negatives`; writes training_set.jsonl and dev_set.jsonl.\n\nRead `quotas.py` first, then `drop_rule.py`. Uses the search and reranker from the retrieval modules.",
+  "children": [
+    {
+      "id": "TRAIN.G1",
+      "kind": "group",
+      "label": "Files",
+      "summary": "The three home files: mix, question cleaning and the negative drop rule.",
+      "details": "Small pure-function modules with no I/O; the scripts in exploration/training_questions/ call them. Tests live in tests/training/.",
+      "children": [
+        {
+          "id": "TRAIN.G1.F1",
+          "kind": "file",
+          "label": "quotas.py",
+          "summary": "How many questions per type and source, and which documents qualify.",
+          "details": "`TYPE_WEIGHTS` (175/125/40/20) and `SOURCE_WEIGHTS` copy the benchmark's mix (paper Table 10). `split_by_weight` divides a total by largest remainder so counts sum exactly. `is_usable_source` requires 200 chars, or 3000 for intra-document reasoning.",
+          "path": "src/train_rag/training/quotas.py",
+          "symbols": [
+            "split_by_weight",
+            "is_usable_source",
+            "TYPE_WEIGHTS",
+            "SOURCE_WEIGHTS"
+          ]
+        },
+        {
+          "id": "TRAIN.G1.F2",
+          "kind": "file",
+          "label": "drop_rule.py",
+          "summary": "Picks hard negatives just below the reranker's biggest score drop.",
+          "details": "`biggest_drop` finds the largest gap between neighbouring scores in the top 30 and returns how many documents sit above it. `pick_negatives` returns up to 5 ids below the drop (not evaluation docs, scoring under the positive), or None if the positive is not above the drop. `candidates_with_positive` appends the source if search missed it.",
+          "path": "src/train_rag/training/drop_rule.py",
+          "symbols": [
+            "pick_negatives",
+            "biggest_drop",
+            "candidates_with_positive"
+          ],
+          "children": [
+            {
+              "id": "TRAIN.G1.F2.N1",
+              "kind": "note",
+              "label": "Drop rule instead of an LLM judge",
+              "summary": "Documents above the drop may be false negatives, so negatives come only from below it.",
+              "details": "Brainstorm 003 proposed a judge on every near candidate (about $24 for 2,000 questions with Gemini). Brainstorm 004 found the reranker's biggest drop can replace it: documents above it may also answer the question, so they are dropped, and a question whose source is not above the drop is ambiguous and skipped. The user chose this rule on 11 November; a fixed 0.02 cut is kept for comparison.",
+              "note_kind": "why",
+              "doc": "docs/brainstorm/004_reranker_grey_zone.md"
+            }
+          ]
+        },
+        {
+          "id": "TRAIN.G1.F3",
+          "kind": "file",
+          "label": "questions.py",
+          "summary": "Cleans an LLM answer into one question.",
+          "details": "`clean_question` takes the first non-empty line, strips markdown emphasis, quotes and a Query:/Question: prefix, and returns None when empty or over 400 characters.",
+          "path": "src/train_rag/training/questions.py",
+          "symbols": [
+            "clean_question"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TRAIN.N1",
+      "kind": "note",
+      "label": "Benchmark mix, own questions",
+      "summary": "The generated set mirrors the benchmark so training matches the test, without reusing its questions.",
+      "details": "Training on the benchmark's 500 questions would make the test a memory test. So questions are generated with the benchmark's own public prompts and the same type and source mix (`quotas.py`). The right documents of all 500 questions and their 20 nearest gte neighbours are excluded as sources and as negatives, and a dev set drawn first is held out the same way, so tuning never touches the test set.",
+      "note_kind": "why",
+      "doc": "docs/brainstorm/005_synthetic_training_questions.md"
+    },
+    {
+      "id": "TRAIN.N2",
+      "kind": "note",
+      "label": "Pure functions, scripts do the I/O",
+      "summary": "Logic lives in small tested functions; database, LLM and reranker calls stay in scripts.",
+      "details": "The module has no database or model calls: functions take scores, counts or strings and return plain lists or dicts, so they are tested in tests/training/. The long, costly steps (generation, about 2.5 h of reranking) run from scripts that cache results and resume on rerun.",
+      "note_kind": "style"
+    },
+    {
+      "id": "TRAIN.N3",
+      "kind": "note",
+      "label": "Why hard negatives",
+      "summary": "gte separates topics but not near-duplicates, so training needs near-duplicate negatives.",
+      "details": "Brainstorm 003: gte adds only about 3% over BM25, a question scores 0.74 against its own top 50 versus 0.56 against another's, and its top 50 spans only 0.05 cosine. Random negatives would teach nothing new, so negatives are reranked near-duplicates of the right document.",
+      "note_kind": "why",
+      "doc": "docs/brainstorm/003_negative_sampling_dataset.md"
+    }
+  ]
+}

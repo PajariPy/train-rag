@@ -34,7 +34,7 @@ from train_rag.repository.embedding import embedded_sources
 from train_rag.repository.search import chunk_texts, document_titles, nearest_chunks
 from train_rag.reranker import GteModernBertReranker, Reranker
 from train_rag.retrieval import CHUNKS_PER_DOCUMENT, Bm25Retriever
-from train_rag.tables import EMBEDDING_TABLES
+from train_rag.tables import tables_for
 
 # Documents taken from each ranking into the fusion.
 CANDIDATES = 50
@@ -71,23 +71,32 @@ class RetrievalPipeline:
         self.bm25 = bm25
         self.sources = sources
         self.reranker = reranker
-        self.tables = EMBEDDING_TABLES[embedder.dimensions]
+        self.tables = tables_for(embedder.dimensions, embedder.finetuned)
         self.model_lock = asyncio.Lock()  # the GPU models are shared by concurrent queries
 
     @classmethod
-    def load(cls, index_dir: Path | None = None, rerank: bool = True) -> "RetrievalPipeline":
+    def load(
+        cls,
+        index_dir: Path | None = None,
+        rerank: bool = True,
+        embedder: Embedder | None = None,
+    ) -> "RetrievalPipeline":
         """Load gte-modernbert, the BM25 index of the whole corpus and the reranker.
 
         Args:
             index_dir: Folder of the BM25 index; the whole corpus's by default.
             rerank: Load gte-reranker-modernbert and rerank the fused documents.
+            embedder: The embedder to search with; the base gte-modernbert by default. A
+                fine-tuned one searches its own tables.
 
         Returns:
             The ready pipeline.
         """
-        embedder = GteModernBertEmbedder()
+        embedder = embedder or GteModernBertEmbedder()
         with Session(get_engine()) as session:
-            sources = embedded_sources(session, embedder.dimensions, embedder.name, FIELD)
+            sources = embedded_sources(
+                session, tables_for(embedder.dimensions, embedder.finetuned), embedder.name, FIELD
+            )
 
         return cls(
             get_async_engine(),

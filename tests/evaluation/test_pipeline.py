@@ -10,6 +10,8 @@ from train_rag.evaluation import (
     evaluate_question,
     evaluate_questions,
 )
+from train_rag.evaluation.person import Person
+from train_rag.evaluation.system import ClarifyingSystem
 from train_rag.models import Question, QuestionType
 from train_rag.models.evaluation import AnswerGrade, SystemAnswer
 
@@ -148,3 +150,68 @@ def test_results_keep_question_order_and_report_progress() -> None:
 
     assert [result.question_id for result in results] == ["qst_1", "qst_2"]
     assert calls == [(1, 2), (2, 2)]
+
+
+class EchoPerson:
+    """Replies with the question it was made for."""
+
+    def __init__(self, question: Question) -> None:
+        """Remember the question."""
+        self.question = question
+
+    def reply(self, ask: str) -> str:
+        """Reply with the question's id."""
+        return self.question.id
+
+
+class AskingSystem(ClarifyingSystem):
+    """Asks the person once and answers with the reply."""
+
+    name: ClassVar[str] = "asking"
+
+    def answer(self, question: str) -> SystemAnswer:
+        """Answer without anyone to ask."""
+        return SystemAnswer(answer="no one asked")
+
+    def answer_with(self, question: str, person: Person) -> SystemAnswer:
+        """Answer with the person's reply."""
+        return SystemAnswer(answer=person.reply("which one?"))
+
+
+def test_clarifying_system_gets_a_fresh_person_per_question() -> None:
+    """Each question gets its own person, made for that question."""
+    made: list[str] = []
+
+    def factory(question: Question) -> Person:
+        made.append(question.id)
+        return EchoPerson(question)
+
+    results = evaluate_questions(
+        AskingSystem(), ExactMatchJudge(), QUESTIONS, workers=1, person_factory=factory
+    )
+
+    assert made == ["qst_1", "qst_2"]
+    assert [result.answer for result in results] == ["qst_1", "qst_2"]
+
+
+def test_plain_system_ignores_person_factory() -> None:
+    """A system that can't ask runs as before; no person is made."""
+    made: list[str] = []
+
+    def factory(question: Question) -> Person:
+        made.append(question.id)
+        return EchoPerson(question)
+
+    result = evaluate_question(
+        OracleSystem(QUESTIONS), ExactMatchJudge(), QUESTIONS[0], person_factory=factory
+    )
+
+    assert made == []
+    assert result.score == 1.0
+
+
+def test_clarifying_system_without_factory_answers_plainly() -> None:
+    """Without a person factory, a clarifying system answers from the question alone."""
+    result = evaluate_question(AskingSystem(), ExactMatchJudge(), QUESTIONS[0])
+
+    assert result.answer == "no one asked"

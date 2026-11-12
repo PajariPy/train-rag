@@ -4,9 +4,11 @@ import argparse
 import asyncio
 from pathlib import Path
 
+from train_rag.clarify import report_clarification, write_memories
 from train_rag.download import DEFAULT_DATA_DIR, download_dataset
 from train_rag.embedder import EMBEDDERS
 from train_rag.evaluate import evaluate, evaluate_search
+from train_rag.evaluation.clarify_report import read_question_ids
 from train_rag.evaluation.registry import JUDGES, RETRIEVERS, SYSTEMS
 from train_rag.import_db import import_corpus
 from train_rag.index_bm25 import index_bm25
@@ -69,6 +71,20 @@ def build_parser() -> argparse.ArgumentParser:
     scoring.add_argument(
         "--wrong-in", type=int, metavar="RUN", help="only the questions this run got wrong"
     )
+    scoring.add_argument(
+        "--question-ids", type=Path, metavar="FILE", help="only these questions, one id per line"
+    )
+    memories = commands.add_parser(
+        "write-memories", help="write what the person behind each question remembers (Gemini)"
+    )
+    memories.add_argument("--question-ids", type=Path, metavar="FILE", required=True)
+    memories.add_argument("--redo", nargs="+", metavar="ID", help="rewrite only these notes")
+    clarify = commands.add_parser(
+        "clarify-report", help="compare a run with clarifying questions against zero-shot"
+    )
+    clarify.add_argument("--run", type=int, required=True, help="the run with clarification")
+    clarify.add_argument("--baseline", type=int, required=True, help="the zero-shot run")
+    clarify.add_argument("--question-ids", type=Path, metavar="FILE", required=True)
 
     return parser
 
@@ -117,7 +133,14 @@ def main() -> None:
             args.limit,
             args.workers,
             args.wrong_in,
+            read_question_ids(args.question_ids) if args.question_ids else None,
         )
+
+    if args.command == "write-memories":
+        write_memories(read_question_ids(args.question_ids), args.redo)
+
+    if args.command == "clarify-report":
+        report_clarification(args.run, args.baseline, read_question_ids(args.question_ids))
 
 
 if __name__ == "__main__":

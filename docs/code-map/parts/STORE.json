@@ -422,6 +422,36 @@
       ]
     },
     {
+      "id": "STORE.V8",
+      "kind": "variant",
+      "label": "Question memories",
+      "summary": "One memory note per failure question, read by the simulated person (CLAR).",
+      "details": "Stores what the clarifying-question evaluation's simulated person remembers about each question: a short note written once by `write-memories` and never rewritten before a report is final.\n\n- `tables/question_memory.py`: the `question_memories` table.\n- `repository/question_memory.py`: read and save notes per question.\n- `models/memory.py`: the pydantic shape of a note.\n\nUsed by the CLAR module (`memory_notes.py`, `person.py`).",
+      "children": [
+        {
+          "id": "STORE.V8.F1",
+          "kind": "file",
+          "label": "tables/question_memory.py",
+          "summary": "The question_memories table.",
+          "path": "src/train_rag/tables/question_memory.py"
+        },
+        {
+          "id": "STORE.V8.F2",
+          "kind": "file",
+          "label": "repository/question_memory.py",
+          "summary": "Read and save memory notes.",
+          "path": "src/train_rag/repository/question_memory.py"
+        },
+        {
+          "id": "STORE.V8.F3",
+          "kind": "file",
+          "label": "models/memory.py",
+          "summary": "The memory note model.",
+          "path": "src/train_rag/models/memory.py"
+        }
+      ]
+    },
+    {
       "id": "STORE.V7",
       "kind": "variant",
       "label": "Inferred (LLM experiments)",

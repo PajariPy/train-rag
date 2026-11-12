@@ -341,7 +341,7 @@
 			"type": "text",
 			"text": "## 7 · Evaluation improvement\n**Idea:** Currently evaluation assumes that we one-shot the relevant document, but in real life we can make agent ask follow up questions. The main idea is to add evaluation on the same questions, but allow agent to ask about the details and have details prepared.",
 			"x": 0,
-			"y": 6000,
+			"y": 7176,
 			"width": 520,
 			"height": 220,
 			"color": "5"
@@ -455,6 +455,156 @@
 			"width": 520,
 			"height": 258,
 			"color": "4"
+		},
+		{
+			"id": "abstain_ptr",
+			"type": "text",
+			"text": "### ? Related problem found (9 Nov)\nWhen search misses, the agents answer from a near-duplicate in ~55–60% of cases instead of saying \"I could not find this\" (pipeline: 20%).\n\nTracked in its own map: **llm_abstention_problem.canvas**",
+			"x": 600,
+			"y": 7176,
+			"width": 520,
+			"height": 258,
+			"color": "3"
+		},
+		{
+			"id": "s8",
+			"type": "text",
+			"x": 0,
+			"y": 7574,
+			"width": 520,
+			"height": 528,
+			"color": "5",
+			"text": "## 8 · What does the embedder add? (10 Nov)\n**Why:** before training anything, measure what gte brings next to BM25.\n\nReplayed gte, BM25 and fused top 50 for all 500 questions (742 right documents):\n- both find it: **54%**\n- BM25 only: **24%**\n- ✗ gte only: **3%**\n- neither: **19%**\n\ngte mostly finds what BM25 already finds; it fails on semantic questions.\n`exploration/retriever_attribution/`"
+		},
+		{
+			"id": "s8a",
+			"type": "text",
+			"x": 600,
+			"y": 7574,
+			"width": 520,
+			"height": 378,
+			"color": "5",
+			"text": "## 8a · Bigger general embedder: Qwen3-Embedding-0.6B\n**Why:** the usual advice is to try a stronger model before fine-tuning.\nSample estimate (100 questions, 163 right docs, 5k distractors; full re-index would take ~23 h):\n- gte: top 50 49%, with BM25 **128**\n- Qwen: top 50 55%, with BM25 **128**\n- ✗ semantic 9 vs 9 of 27: better only at keyword-like matches BM25 already has."
+		},
+		{
+			"id": "end8a",
+			"type": "text",
+			"x": 1200,
+			"y": 7574,
+			"width": 520,
+			"height": 186,
+			"color": "1",
+			"text": "### ⛔ Dead end: swap in a bigger general embedder\nEqual hybrid result (128 vs 128). Near-duplicates need training on our data, not a bigger model."
+		},
+		{
+			"id": "s8b",
+			"type": "text",
+			"x": 600,
+			"y": 8012,
+			"width": 520,
+			"height": 378,
+			"color": "5",
+			"text": "## 8b · Who can tell near-duplicates apart? (teacher)\n46 semantic failures, ~53 candidates each, right document in top 5:\n- gte: 0\n- ✓ **gte-reranker: 25** (median rank 4, local, free)\n- gemini-embedding-2: 17 (spreads near-duplicates 2.7× wider, but ranks worse than the reranker in 26 of 46)"
+		},
+		{
+			"id": "dec8",
+			"type": "text",
+			"x": 1200,
+			"y": 8012,
+			"width": 520,
+			"height": 178,
+			"color": "4",
+			"text": "### ✓ Decision (11 Nov)\n**Fine-tune gte with hard negatives**, using the reranker as the teacher. The benchmark stays for evaluation only. (Article 006, decisions 10–11 Nov.)"
+		},
+		{
+			"id": "s9",
+			"type": "text",
+			"x": 0,
+			"y": 8530,
+			"width": 520,
+			"height": 228,
+			"color": "5",
+			"text": "## 9 · Picking hard negatives cheaply (11 Nov)\n**Why:** a near-duplicate ranked just below the answer is the best negative, but some \"negatives\" are really other right answers (false negatives)."
+		},
+		{
+			"id": "s9a",
+			"type": "text",
+			"x": 600,
+			"y": 8530,
+			"width": 520,
+			"height": 198,
+			"color": "5",
+			"text": "## 9a · Reranker + LLM ambiguity judge\nBrainstorm 003. Reranker picks the grey zone, an LLM judges each candidate."
+		},
+		{
+			"id": "end9a",
+			"type": "text",
+			"x": 1200,
+			"y": 8530,
+			"width": 520,
+			"height": 178,
+			"color": "2",
+			"text": "### ⏸ Stopped: judge too expensive\n~$24 for 2,000 questions with Gemini.\n**Reopen if** the drop rule's false negatives turn out to hurt training."
+		},
+		{
+			"id": "s9b",
+			"type": "text",
+			"x": 600,
+			"y": 8788,
+			"width": 520,
+			"height": 214,
+			"color": "5",
+			"text": "## 9b · One score threshold\nBrainstorm 004. Is there a reranker score gap where the model stops being sure?\n- ✗ No threshold works inside the grey zone; a fixed 0.02 cut was set by hand from 6 points."
+		},
+		{
+			"id": "s9c",
+			"type": "text",
+			"x": 600,
+			"y": 9062,
+			"width": 520,
+			"height": 394,
+			"color": "5",
+			"text": "## 9c · Biggest drop per question\nLargest step between neighbouring reranker scores in the top 30; negatives = up to 5 just below it; skip the question if its source is below.\n- Benchmark failures: right doc above the drop 27 of 46.\n- ✓ Training-like sample: **91 of 100**, median 1 above the drop.\n- ✗ Knee detectors (Kneedle, TAA-k) and a small ML model: no better (46 examples too few to learn the line)."
+		},
+		{
+			"id": "dec9",
+			"type": "text",
+			"x": 1200,
+			"y": 9062,
+			"width": 520,
+			"height": 208,
+			"color": "4",
+			"text": "### ✓ Decision (11 Nov)\nUse the **biggest-drop rule**: free, local, no judge. Literature: knee detection (Vectara, TAA-k), positive-aware filtering (NV-Retriever). Brainstorm 004."
+		},
+		{
+			"id": "s10",
+			"type": "text",
+			"x": 0,
+			"y": 9596,
+			"width": 520,
+			"height": 348,
+			"color": "5",
+			"text": "## 10 · Our own training questions (11 Nov)\n**Why:** keep the benchmark for the final test only, and tune on a dev set so we don't overfit to it.\nBenchmark's own prompts (MIT), one-document types first, same type and source mix. No evaluation document or its 20 nearest neighbours as a source. Brainstorm 005."
+		},
+		{
+			"id": "s10a",
+			"type": "text",
+			"x": 600,
+			"y": 9596,
+			"width": 520,
+			"height": 514,
+			"color": "5",
+			"text": "## 10a · Generation + mining\n- 3,120 sources, **3,011 valid** questions, **$0.96** (DeepSeek, LangGraph)\n- intra-document: 238 of 347 pass the benchmark's check\n- mining: search + rerank + biggest drop, local, ~3.2 h\n- ✓ kept **train 2,067 / 2,510**, **dev 422 / 501**, 5 negatives each\n- semantic skipped 35%; for 61% of semantic questions the source wasn't in the fused top 50, yet the reranker rescues most → exactly what the embedder must learn\n- review fix: no dev answer as a train negative (and the reverse)"
+		},
+		{
+			"id": "next10",
+			"type": "text",
+			"x": 1200,
+			"y": 9596,
+			"width": 520,
+			"height": 178,
+			"color": "3",
+			"text": "### ? Next (12 Nov)\nFine-tune gte on the training set (MNRL + hard negatives), tune on dev, test on the benchmark once at the end. Ask before paid Vast.ai runs."
 		}
 	],
 	"edges": [
@@ -680,6 +830,118 @@
 			"fromNode": "s6d_trunc",
 			"fromSide": "right",
 			"toNode": "s6d_trunc_dec",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s7_abstain",
+			"fromNode": "bef2ae1146b17ee9",
+			"fromSide": "right",
+			"toNode": "abstain_ptr",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s6_s7",
+			"fromNode": "s6",
+			"fromSide": "bottom",
+			"toNode": "bef2ae1146b17ee9",
+			"toSide": "top"
+		},
+		{
+			"id": "e_bef2ae1146b17ee9_s8",
+			"fromNode": "bef2ae1146b17ee9",
+			"fromSide": "bottom",
+			"toNode": "s8",
+			"toSide": "top"
+		},
+		{
+			"id": "e_s8_s9",
+			"fromNode": "s8",
+			"fromSide": "bottom",
+			"toNode": "s9",
+			"toSide": "top"
+		},
+		{
+			"id": "e_s9_s10",
+			"fromNode": "s9",
+			"fromSide": "bottom",
+			"toNode": "s10",
+			"toSide": "top"
+		},
+		{
+			"id": "e_s8_s8a",
+			"fromNode": "s8",
+			"fromSide": "right",
+			"toNode": "s8a",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s8a_end8a",
+			"fromNode": "s8a",
+			"fromSide": "right",
+			"toNode": "end8a",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s8_s8b",
+			"fromNode": "s8",
+			"fromSide": "right",
+			"toNode": "s8b",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s8b_dec8",
+			"fromNode": "s8b",
+			"fromSide": "right",
+			"toNode": "dec8",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s9_s9a",
+			"fromNode": "s9",
+			"fromSide": "right",
+			"toNode": "s9a",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s9a_end9a",
+			"fromNode": "s9a",
+			"fromSide": "right",
+			"toNode": "end9a",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s9_s9b",
+			"fromNode": "s9",
+			"fromSide": "right",
+			"toNode": "s9b",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s9_s9c",
+			"fromNode": "s9",
+			"fromSide": "right",
+			"toNode": "s9c",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s9c_dec9",
+			"fromNode": "s9c",
+			"fromSide": "right",
+			"toNode": "dec9",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s10_s10a",
+			"fromNode": "s10",
+			"fromSide": "right",
+			"toNode": "s10a",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s10a_next10",
+			"fromNode": "s10a",
+			"fromSide": "right",
+			"toNode": "next10",
 			"toSide": "left"
 		}
 	]

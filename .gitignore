@@ -32,3 +32,12 @@ exploration/*/data/batch_results.jsonl
 
 # Fine-tuning outputs (LoRA adapters, logs) copied back from rented GPUs
 exploration/fact_extraction/runs/
+exploration/embedder_finetune/runs/
+exploration/embedder_finetune/vast/.instance*
+exploration/training_questions/data/uuid_index.json
+
+# Fine-tuned model weights (copied from a training run)
+/models/
+
+# Weights & Biases local run files
+/wandb/

@@ -52,18 +52,30 @@ BASES: dict[int, tuple[type[EmbeddingRecord], str]] = {
 }
 
 
-def source_table(dimensions: int, source_type: SourceType) -> type[EmbeddingRecord]:
+# A fine-tuned model's vectors live in tables of their own, so the base model's index and
+# rows stay untouched and the two can be compared side by side.
+FINETUNED_SUFFIX = "embeddings_768_ft"
+
+
+def source_table(
+    dimensions: int, source_type: SourceType, finetuned: bool = False
+) -> type[EmbeddingRecord]:
     """Define the table of one source for vectors of one size.
 
     Args:
         dimensions: Vector size.
         source_type: Source the table holds.
+        finetuned: The fine-tuned model's table instead of the base model's.
 
     Returns:
-        The table model, e.g. `slack_embeddings` or `slack_embeddings_768`.
+        The table model, e.g. `slack_embeddings`, `slack_embeddings_768` or
+        `slack_embeddings_768_ft`.
     """
     base, suffix = BASES[dimensions]
-    name = f"{source_type.value.title().replace('_', '')}{base.__name__}"
+    if finetuned:
+        suffix = FINETUNED_SUFFIX
+    kind = "Finetuned" if finetuned else ""
+    name = f"{source_type.value.title().replace('_', '')}{kind}{base.__name__}"
     table = types.new_class(
         name,
         (base,),
@@ -82,3 +94,20 @@ EMBEDDING_TABLES: dict[int, dict[SourceType, type[EmbeddingRecord]]] = {
     dimensions: {source_type: source_table(dimensions, source_type) for source_type in SourceType}
     for dimensions in BASES
 }
+
+FINETUNED_TABLES: dict[SourceType, type[EmbeddingRecord]] = {
+    source_type: source_table(768, source_type, finetuned=True) for source_type in SourceType
+}
+
+
+def tables_for(dimensions: int, finetuned: bool) -> dict[SourceType, type[EmbeddingRecord]]:
+    """The embedding tables an embedder reads and writes.
+
+    Args:
+        dimensions: The embedder's vector size.
+        finetuned: Whether it is a fine-tuned model (it has tables of its own).
+
+    Returns:
+        Source -> table.
+    """
+    return FINETUNED_TABLES if finetuned else EMBEDDING_TABLES[dimensions]
