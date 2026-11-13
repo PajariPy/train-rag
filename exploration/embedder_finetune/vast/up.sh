@@ -4,7 +4,7 @@
 #
 # 1. Rent the cheapest reliable $GPU that boots and answers ssh (up to 3 offers tried).
 # 2. Install uv and the same package versions as the laptop; download gte-modernbert-base.
-# 3. Upload train.py and data/ (training set, dev set, document texts, ~190 MB).
+# 3. Upload train.py and the training data (training set, dev set, document texts, ~190 MB).
 # 4. Write the machine's id, host and port to vast/.instance for run.sh, fetch.sh, down.sh.
 #
 # If setup fails, the machine is destroyed right away.
@@ -81,7 +81,10 @@ $SSH "cd /workspace/job && (curl -LsSf https://astral.sh/uv/install.sh | sh) > s
 log "$($SSH 'tail -1 /workspace/job/setup.log')"
 
 # 3. Code and data.
-$SCP -r "$ROOT/train.py" "$ROOT/data" "root@$HOST:/workspace/job/" || { log "upload failed"; exit 1; }
+$SSH -n "mkdir -p /workspace/job/data"
+$SCP "$ROOT/train.py" "root@$HOST:/workspace/job/" || { log "upload failed"; exit 1; }
+$SCP "$ROOT/data/training_set.jsonl" "$ROOT/data/dev_set.jsonl" "$ROOT/data/documents.jsonl" \
+  "root@$HOST:/workspace/job/data/" || { log "upload failed"; exit 1; }
 
 # 4. Remember the machine; from here on only down.sh destroys it.
 printf 'INSTANCE=%s\nHOST=%s\nPORT=%s\nPRICE=%s\nSTARTED=%s\n' \

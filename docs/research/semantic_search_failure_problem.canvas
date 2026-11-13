@@ -597,14 +597,84 @@
 			"text": "## 10a · Generation + mining\n- 3,120 sources, **3,011 valid** questions, **$0.96** (DeepSeek, LangGraph)\n- intra-document: 238 of 347 pass the benchmark's check\n- mining: search + rerank + biggest drop, local, ~3.2 h\n- ✓ kept **train 2,067 / 2,510**, **dev 422 / 501**, 5 negatives each\n- semantic skipped 35%; for 61% of semantic questions the source wasn't in the fused top 50, yet the reranker rescues most → exactly what the embedder must learn\n- review fix: no dev answer as a train negative (and the reverse)"
 		},
 		{
-			"id": "next10",
+			"id": "s11",
+			"type": "text",
+			"x": 0,
+			"y": 10250,
+			"width": 520,
+			"height": 348,
+			"color": "5",
+			"text": "## 11 · Fine-tune gte with hard negatives (12 Nov)\n**Why:** teach the embedder our near-duplicates, the failure no general model fixed (step 8).\nFull fine-tune of gte-modernbert-base (149M) on 2,067 questions, 5 hard negatives each, cached MNRL, 32 questions per step. Rented RTX 4090 ($0.37/h).\nDev check: rank each dev question's right document among its own ~51 search candidates."
+		},
+		{
+			"id": "s11a",
+			"type": "text",
+			"x": 600,
+			"y": 10250,
+			"width": 520,
+			"height": 454,
+			"color": "5",
+			"text": "## 11a · Runs (dev, 422 questions)\nTop 10 / MRR / semantic top 10:\n- before: 49% / 0.35 / 23%\n- ✗ laptop, docs cut to 1,024 tokens: 55% / 0.34 / 47% (top 1 drops)\n- full length, lr 2e-5: 73% / 0.50 / 68%\n- lr 1e-5: 78% / 0.56 / 69%\n- ✓ **lr 5e-6, 2 epochs: 82% / 0.56 / 77%**\n- lr 5e-6, 3 epochs: 82% / 0.57 / 72%\n- 64 per step: 78% / 0.58 / 67% (sharper top, fewer found)\nGentle training wins; full-length documents are essential."
+		},
+		{
+			"id": "dec11",
 			"type": "text",
 			"x": 1200,
-			"y": 9596,
+			"y": 10250,
+			"width": 520,
+			"height": 298,
+			"color": "4",
+			"text": "### ✓ Decision (12 Nov)\nUse **lr5e-6-e2**: best top 10 and semantic, tied MRR. The embedder's job is to get the right document into the reranker's list, so top 10 counts most.\nIts vectors go in separate `_768_ft` tables; retrievers `gte-ft-chunk`, `hybrid-ft`, `hybrid-ft-rerank`."
+		},
+		{
+			"id": "end11a",
+			"type": "text",
+			"x": 1800,
+			"y": 10250,
+			"width": 520,
+			"height": 208,
+			"color": "2",
+			"text": "### ⏸ Stopped: more tuning\n5-epoch curve and a plateau learning-rate schedule left out: the last runs differ by a few questions, and dev is written like train.\n**Reopen if** the benchmark gain is small."
+		},
+		{
+			"id": "s11b",
+			"type": "text",
+			"x": 600,
+			"y": 10764,
+			"width": 520,
+			"height": 498,
+			"color": "5",
+			"text": "## 11b · Real search over the whole corpus (dev)\nCorpus re-embedded on 4 × RTX 4090 (512k chunks, 21 min, ~$2.30). 422 dev questions through production search, base vs fine-tuned:\n- embedder top 50: 61% → **70%** (semantic 35% → 53%)\n- fused top 50: 80% → **84%**\n- ✓ reranked top 10: 80% → **84%** (semantic 49% → **61%**)\n- first place: 70% → 74%\nSmaller than the candidate check: near-duplicates from the whole corpus compete now. The reranker places every listed right document (353/353)."
+		},
+		{
+			"id": "next11",
+			"type": "text",
+			"x": 1200,
+			"y": 10764,
 			"width": 520,
 			"height": 178,
 			"color": "3",
-			"text": "### ? Next (12 Nov)\nFine-tune gte on the training set (MNRL + hard negatives), tune on dev, test on the benchmark once at the end. Ask before paid Vast.ai runs."
+			"text": "### ? Next\nBenchmark run with `hybrid-ft-rerank` against the base run (paid: Gemini judge). The benchmark decides whether the dev gain holds."
+		},
+		{
+			"id": "s11c",
+			"type": "text",
+			"x": 600,
+			"y": 11322,
+			"width": 520,
+			"height": 348,
+			"color": "5",
+			"text": "## 11c · Qwen3-Embedding-0.6B fine-tune\n**Why:** untouched it beats untouched gte on dev (top 10 61% vs 49%, semantic 41% vs 23%).\nSame settings + a task instruction for questions. At 40% of training, MRR 0.54 on 100 dev questions, level with gte.\n- ✗ crashed at 60%: disk full (each Qwen checkpoint ~7 GB)."
+		},
+		{
+			"id": "end11c",
+			"type": "text",
+			"x": 1200,
+			"y": 11322,
+			"width": 520,
+			"height": 238,
+			"color": "2",
+			"text": "### ⏸ Stopped: Qwen fine-tune (12 Nov)\nOut of Vast credit ($0.60 left). ~$1 to finish (60 GB disk, one checkpoint), ~$5 more to re-embed the corpus.\n**Reopen if** the benchmark shows gte-ft still misses many semantic questions."
 		}
 	],
 	"edges": [
@@ -938,10 +1008,59 @@
 			"toSide": "left"
 		},
 		{
-			"id": "e_s10a_next10",
-			"fromNode": "s10a",
+			"id": "e_s10_s11",
+			"fromNode": "s10",
+			"fromSide": "bottom",
+			"toNode": "s11",
+			"toSide": "top"
+		},
+		{
+			"id": "e_s11_s11a",
+			"fromNode": "s11",
 			"fromSide": "right",
-			"toNode": "next10",
+			"toNode": "s11a",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s11a_dec11",
+			"fromNode": "s11a",
+			"fromSide": "right",
+			"toNode": "dec11",
+			"toSide": "left"
+		},
+		{
+			"id": "e_dec11_end11a",
+			"fromNode": "dec11",
+			"fromSide": "right",
+			"toNode": "end11a",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s11_s11b",
+			"fromNode": "s11",
+			"fromSide": "right",
+			"toNode": "s11b",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s11b_next11",
+			"fromNode": "s11b",
+			"fromSide": "right",
+			"toNode": "next11",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s11_s11c",
+			"fromNode": "s11",
+			"fromSide": "right",
+			"toNode": "s11c",
+			"toSide": "left"
+		},
+		{
+			"id": "e_s11c_end11c",
+			"fromNode": "s11c",
+			"fromSide": "right",
+			"toNode": "end11c",
 			"toSide": "left"
 		}
 	]

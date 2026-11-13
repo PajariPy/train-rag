@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Embed the whole corpus with a fine-tuned model on a rented multi-GPU machine.
 #
-# Needs a machine from `MACHINE=embed NUM_GPUS=4 ./up.sh` (it uploads data/, which holds
-# corpus.jsonl.gz from export_corpus.py). Then:
-# 1. upload the model folder and embed_corpus.py;
+# Needs a machine from `MACHINE=embed NUM_GPUS=4 ./up.sh` and data/corpus.jsonl.gz from
+# export_corpus.py. Then:
+# 1. upload the corpus, the model folder and embed_corpus.py (each only once);
 # 2. start one embed_corpus.py per GPU, each on its own shard of the corpus;
 # 3. wait until every shard has written its done marker;
 # 4. copy the vector parts back to data/vectors/ (for import_vectors.py).
@@ -18,8 +18,11 @@ MODEL_DIR=${1:?usage: embed.sh MODEL_DIR}
 SHARDS=$($SSH -n 'nvidia-smi -L | wc -l')
 OUT=$ROOT/data/vectors
 
-# 1. Model and script (skipped once the model is there).
-$SSH -n 'mkdir -p /workspace/job/model /workspace/job/vectors'
+# 1. Corpus, model and script (corpus and model only once).
+$SSH -n 'mkdir -p /workspace/job/data /workspace/job/model /workspace/job/vectors'
+if ! $SSH -n 'test -f /workspace/job/data/corpus.jsonl.gz'; then
+  $SCP "$ROOT/data/corpus.jsonl.gz" "root@$HOST:/workspace/job/data/" || exit 1
+fi
 if ! $SSH -n 'test -f /workspace/job/model/model.safetensors'; then
   $SCP -r "$MODEL_DIR"/. "root@$HOST:/workspace/job/model/" || exit 1
 fi

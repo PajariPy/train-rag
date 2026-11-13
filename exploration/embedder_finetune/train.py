@@ -357,7 +357,7 @@ def main() -> None:
         eval_steps=eval_steps,
         save_strategy="steps",
         save_steps=eval_steps,
-        save_total_limit=2,
+        save_total_limit=1,  # a Qwen-size checkpoint with optimizer state is ~7 GB
         logging_steps=1,
         seed=SEED,
         prompts={"anchor": query_prompt} if query_prompt else None,
