@@ -47,6 +47,7 @@ class Budget:
     searches: int = 1
     reads: int = 0
     keyword_searches: int = 0
+    extra_searches: int = 0  # searches granted on top of the agent's limit
 
 
 class AgentSystem(RagSystem):
@@ -154,7 +155,7 @@ class AgentSystem(RagSystem):
         Returns:
             True while searches are left.
         """
-        return budget.searches < self.max_searches
+        return budget.searches < self.max_searches + budget.extra_searches
 
     def run_tool(
         self, tool: str, arguments: dict[str, object], question: str, budget: Budget
@@ -171,7 +172,7 @@ class AgentSystem(RagSystem):
             What the model receives (the documents' text, or an error) and the documents
             the call found.
         """
-        if budget.searches >= self.max_searches:
+        if budget.searches >= self.max_searches + budget.extra_searches:
             return {"error": LIMIT_REACHED}, []
         budget.searches += 1
         hits = self.search(tool, str(arguments.get("query") or question))
@@ -193,7 +194,7 @@ class AgentSystem(RagSystem):
 
         return self.knowledge_base.retrieve(query, self.top_k)
 
-    def answer(self, question: str) -> SystemAnswer:
+    def answer(self, question: str, budget: Budget | None = None) -> SystemAnswer:
         """Search the question, then let the agent search more or answer.
 
         Every step is recorded in the answer's trace: the instructions, the first message,
@@ -202,6 +203,8 @@ class AgentSystem(RagSystem):
 
         Args:
             question: The question text.
+            budget: What the question may use, for agents that carry more in it (such as
+                someone to ask); a fresh `Budget` by default.
 
         Returns:
             The answer, every document the searches returned in the order found, and the
@@ -209,7 +212,7 @@ class AgentSystem(RagSystem):
         """
         hits = self.knowledge_base.retrieve(question, self.top_k)
         found = [hit.doc_id for hit in hits]
-        budget = Budget()
+        budget = budget or Budget()
         documents = documents_context(hits)
         if self.cache:
             # The documents first and the question after them, so the documents can be

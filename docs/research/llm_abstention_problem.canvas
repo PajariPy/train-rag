@@ -1,0 +1,76 @@
+{
+	"nodes": [
+		{
+			"id": "legend",
+			"type": "text",
+			"text": "**How to read**\n⬇ **Down = progress**: the steps in the order we did them.\n➡ **Right = depth**: what a step found, the decision on it, and where the route ends.\n\n**Legend**\n🟪 problem · 🟦 step\n🟩 decision / conclusion\n🟨 open\n\n**Where a route ends**\n🟥 ⛔ **Dead end**: tried, nothing left to explore\n🟧 ⏸ **Stopped**: could work, but not worth the cost (for now)\n\n✓ chosen · ✗ didn't work",
+			"x": -460,
+			"y": 0,
+			"width": 340,
+			"height": 470
+		},
+		{
+			"id": "p0",
+			"type": "text",
+			"text": "# The LLM answers when it should say \"I don't know\"\nWhen search misses the right document, the system should reply \"I could not find this information\". Our agents often answer from a near-duplicate instead.\n\nFound on 9 Nov 2026 while testing clarifying questions on the 46 semantic failures. Not solved yet: a problem for later.",
+			"x": 0,
+			"y": 0,
+			"width": 520,
+			"height": 392,
+			"color": "6"
+		},
+		{
+			"id": "s1",
+			"type": "text",
+			"text": "## 1 · Measure abstention when search misses\n**Why:** how often does the LLM admit it has no answer when the right document isn't among the documents it retrieved? Semantic questions, Gemini judge.\n- ✓ **Pipeline** (one search, run 15): right doc missed in 56 → **80% \"could not find\"**, 20% answered anyway.\n- ✗ **Snippet agent** (run 18): missed in 49 → only **39% \"could not find\"**, **59% answered anyway** (wrong).\n- ✗ Same on the 46 failures (runs 28–30): 43–51% \"could not find\", 49–58% answered anyway.\n- When the right doc *was* found, almost every answer is correct (68 of 69, 75 of 76).",
+			"x": 0,
+			"y": 532,
+			"width": 520,
+			"height": 548,
+			"color": "5"
+		},
+		{
+			"id": "s1c",
+			"type": "text",
+			"text": "### ✓ Conclusions (9 Nov)\n- The agents' extra searches rescue a few questions (semantic 52.8% → 60.8%), but where they don't, the agent is **more likely to answer wrongly than to say it doesn't know**.\n- The pipeline's 11 \"answered anyway\" are mostly ambiguous questions: article 004 found 10 cite a document that does answer. True hallucination ≈ 1 in 56.\n- For the agents, the split between \"a valid other document\" and \"a wrong near-duplicate\" is **not measured yet**.",
+			"x": 600,
+			"y": 532,
+			"width": 520,
+			"height": 408,
+			"color": "4"
+		},
+		{
+			"id": "s1n",
+			"type": "text",
+			"text": "### ? Next (not started)\n- **Rate the agents' \"answered anyway\" answers** like article 004 (does the cited document answer?): ~$1 Gemini. Tells real hallucinations from ambiguous questions.\n- Ideas to test: a **verify step** (does the chosen document really answer *this* question, or a near-duplicate?), a stricter \"answer only if…\" prompt, scoring abstention in the evaluation (a wrong answer worse than \"I don't know\").\n- Watch: clarifying questions and a source filter may change this rate.",
+			"x": 1200,
+			"y": 532,
+			"width": 520,
+			"height": 408,
+			"color": "3"
+		}
+	],
+	"edges": [
+		{
+			"id": "e_p0_s1",
+			"fromNode": "p0",
+			"fromSide": "bottom",
+			"toNode": "s1",
+			"toSide": "top"
+		},
+		{
+			"id": "e_s1_c",
+			"fromNode": "s1",
+			"fromSide": "right",
+			"toNode": "s1c",
+			"toSide": "left"
+		},
+		{
+			"id": "e_c_n",
+			"fromNode": "s1c",
+			"fromSide": "right",
+			"toNode": "s1n",
+			"toSide": "left"
+		}
+	]
+}

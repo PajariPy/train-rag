@@ -91,7 +91,9 @@ class SnippetAgentSystem(AgentSystem):
         Returns:
             True while searches or reads are left.
         """
-        return budget.searches < self.max_searches or budget.reads < self.max_reads
+        searches_left = budget.searches < self.max_searches + budget.extra_searches
+
+        return searches_left or budget.reads < self.max_reads
 
     def run_tool(
         self, tool: str, arguments: dict[str, object], question: str, budget: Budget
@@ -111,7 +113,7 @@ class SnippetAgentSystem(AgentSystem):
             return self.read(str(arguments.get("doc_id") or ""), budget)
         if tool != KEYWORD_TOOL:
             return super().run_tool(tool, arguments, question, budget)
-        if budget.searches >= self.max_searches:
+        if budget.searches >= self.max_searches + budget.extra_searches:
             return super().run_tool(tool, arguments, question, budget)  # the limit error
         budget.searches += 1
 

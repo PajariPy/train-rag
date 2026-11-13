@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "train-rag",
-  "generated": "2026-11-04",
+  "generated": "2026-11-11",
   "source_root": "src/train_rag",
   "root": {
     "id": "ROOT",
@@ -20,7 +20,7 @@
         "kind": "function",
         "name": "build_parser",
         "signature": "() -> argparse.ArgumentParser",
-        "line": 20,
+        "line": 22,
         "doc": "Build the command-line parser with one subcommand per pipeline step.\n\nReturns:\n    The configured parser.",
         "decorators": [],
         "is_async": false,
@@ -30,7 +30,7 @@
         "kind": "function",
         "name": "main",
         "signature": "() -> None",
-        "line": 76,
+        "line": 92,
         "doc": "Run the requested pipeline step.",
         "decorators": [],
         "is_async": false,
@@ -4612,7 +4612,7 @@
             "kind": "base",
             "label": "RagSystem",
             "summary": "ABC: answer(question) returns a SystemAnswer; oracle and no-answer bound the scores.",
-            "details": "The contract every evaluated system shares: `answer(question: str) -> SystemAnswer`, nothing else. `SystemAnswer` carries the answer text, `retrieved_doc_ids` (best first), optional `cited_doc_ids` and an optional agent `trace`.\n\nA new variant subclasses `RagSystem`, sets the class-level `name` and implements `answer`; then it is added to `SYSTEMS` in registry.py to be runnable by name. The system receives only the question text, never the gold answer or expected documents.\n\nTwo reference systems bound the scale: `OracleSystem` (gold answer and expected docs, should score near 100%, so any gap is judge noise) and `NoAnswerSystem` (always the not-found answer, correct only on info-not-found questions).",
+            "details": "The contract every evaluated system shares: `answer(question: str) -> SystemAnswer`, nothing else. `SystemAnswer` carries the answer text, `retrieved_doc_ids` (best first), optional `cited_doc_ids` and an optional agent `trace`.\n\nA new variant subclasses `RagSystem`, sets the class-level `name` and implements `answer`; then it is added to `SYSTEMS` in registry.py to be runnable by name. The system receives only the question text, never the gold answer or expected documents.\n\nTwo reference systems bound the scale: `OracleSystem` (gold answer and expected docs, should score near 100%, so any gap is judge noise) and `NoAnswerSystem` (always the not-found answer, correct only on info-not-found questions).\n\n`ClarifyingSystem` is a subclass of `RagSystem` with `answer_with(question, person)`; `evaluate_question` in pipeline.py passes it a simulated `Person` from an optional `person_factory`. It is implemented in the separate CLAR module.",
             "symbols": [
               "RagSystem",
               "RagSystem.answer",
@@ -4649,7 +4649,7 @@
                     "kind": "class",
                     "name": "RagSystem",
                     "signature": "(ABC)",
-                    "line": 13,
+                    "line": 16,
                     "doc": "A system that answers a question from the corpus and says which documents it used.\n\nA system only ever sees the question text, never the gold answer or the expected\ndocuments, so nothing from the answer key can leak into it.",
                     "decorators": [],
                     "is_async": false,
@@ -4658,8 +4658,31 @@
                         "kind": "method",
                         "name": "answer",
                         "signature": "(self, question: str) -> SystemAnswer",
-                        "line": 23,
+                        "line": 26,
                         "doc": "Answer one question.\n\nArgs:\n    question: The question text.\n\nReturns:\n    The answer and the ids of the documents it is based on.",
+                        "decorators": [
+                          "abstractmethod"
+                        ],
+                        "is_async": false,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "class",
+                    "name": "ClarifyingSystem",
+                    "signature": "(RagSystem)",
+                    "line": 37,
+                    "doc": "A system that may ask the person behind the question before it answers.\n\nIt still never sees the answer key: only the person's replies, which come from what\nthat person remembers.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": [
+                      {
+                        "kind": "method",
+                        "name": "answer_with",
+                        "signature": "(self, question: str, person: 'Person') -> SystemAnswer",
+                        "line": 45,
+                        "doc": "Answer one question, asking the person when the search leaves doubt.\n\nArgs:\n    question: The question text.\n    person: The person who asked, to put clarifying questions to.\n\nReturns:\n    The answer and the ids of the documents it is based on.",
                         "decorators": [
                           "abstractmethod"
                         ],
@@ -4672,7 +4695,7 @@
                     "kind": "class",
                     "name": "OracleSystem",
                     "signature": "(RagSystem)",
-                    "line": 34,
+                    "line": 57,
                     "doc": "Upper bound: answers with the gold answer and the expected documents.\n\nUsed to check the pipeline: it should score close to 100% on every metric, so any\ngap shows how strict or noisy the judge is.",
                     "decorators": [],
                     "is_async": false,
@@ -4681,7 +4704,7 @@
                         "kind": "method",
                         "name": "__init__",
                         "signature": "(self, questions: Sequence[Question]) -> None",
-                        "line": 43,
+                        "line": 66,
                         "doc": "Remember the answer key of the questions it will be asked.\n\nArgs:\n    questions: The benchmark questions.",
                         "decorators": [],
                         "is_async": false,
@@ -4691,7 +4714,7 @@
                         "kind": "method",
                         "name": "answer",
                         "signature": "(self, question: str) -> SystemAnswer",
-                        "line": 51,
+                        "line": 74,
                         "doc": "Return the gold answer and expected documents.\n\nArgs:\n    question: The question text.\n\nReturns:\n    The gold answer, or the not-found answer for an unknown question.",
                         "decorators": [],
                         "is_async": false,
@@ -4703,7 +4726,7 @@
                     "kind": "class",
                     "name": "NoAnswerSystem",
                     "signature": "(RagSystem)",
-                    "line": 67,
+                    "line": 90,
                     "doc": "Lower bound: always says the information is not available.\n\nIt should be correct only on info-not-found questions, and retrieve nothing.",
                     "decorators": [],
                     "is_async": false,
@@ -4712,7 +4735,7 @@
                         "kind": "method",
                         "name": "answer",
                         "signature": "(self, question: str) -> SystemAnswer",
-                        "line": 75,
+                        "line": 98,
                         "doc": "Say the information was not found.\n\nArgs:\n    question: The question text, ignored.\n\nReturns:\n    The not-found answer with no documents.",
                         "decorators": [],
                         "is_async": false,
@@ -5032,7 +5055,7 @@
                     "kind": "class",
                     "name": "KnowledgeBase",
                     "signature": "(Protocol)",
-                    "line": 27,
+                    "line": 28,
                     "doc": "The two searches the agent can run.",
                     "decorators": [],
                     "is_async": false,
@@ -5041,7 +5064,7 @@
                         "kind": "method",
                         "name": "retrieve",
                         "signature": "(self, question: str, limit: int) -> list[SearchHit]",
-                        "line": 30,
+                        "line": 31,
                         "doc": "Search by meaning and keywords together, reranked.",
                         "decorators": [],
                         "is_async": false,
@@ -5051,7 +5074,7 @@
                         "kind": "method",
                         "name": "retrieve_keywords",
                         "signature": "(self, query: str, limit: int) -> list[SearchHit]",
-                        "line": 34,
+                        "line": 35,
                         "doc": "Search by keywords alone (BM25).",
                         "decorators": [],
                         "is_async": false,
@@ -5063,8 +5086,8 @@
                     "kind": "class",
                     "name": "Budget",
                     "signature": "",
-                    "line": 40,
-                    "doc": "What one question has used so far: searches (counting the first) and full reads.",
+                    "line": 41,
+                    "doc": "What one question has used so far: searches (counting the first) and full reads.\n\n`keyword_searches` is counted only by agents that budget keyword searches apart.",
                     "decorators": [
                       "dataclass"
                     ],
@@ -5075,7 +5098,7 @@
                     "kind": "class",
                     "name": "AgentSystem",
                     "signature": "(RagSystem)",
-                    "line": 47,
+                    "line": 53,
                     "doc": "Gemini answers from a first search of the question, and can search more first.\n\nThe question itself is searched with the full retrieval pipeline before Gemini sees\nit, so the agent starts from what the plain pipeline would give and can only add to\nit. Gemini then either answers, or calls one of two tools: the same full search with\nits own wording, or a keyword-only BM25 search for exact names and ids. After\n`max_searches` searches in total, counting the first, the tools are switched off and\nthe next turn must answer. The documents reported for the answer are every document\nany search returned, in the order found.",
                     "decorators": [],
                     "is_async": false,
@@ -5083,9 +5106,9 @@
                       {
                         "kind": "method",
                         "name": "__init__",
-                        "signature": "(self, knowledge_base: KnowledgeBase, client: genai.Client, usage: UsageMeter, top_k: int = 5, max_searches: int = MAX_SEARCHES) -> None",
-                        "line": 61,
-                        "doc": "Set up the agent.\n\nArgs:\n    knowledge_base: The searches behind the tools.\n    client: Gemini client.\n    usage: Counts the tokens and searches.\n    top_k: Documents each search returns.\n    max_searches: Searches allowed per question, counting the first one.",
+                        "signature": "(self, knowledge_base: KnowledgeBase, client: genai.Client, usage: UsageMeter, top_k: int = 5, max_searches: int = MAX_SEARCHES, cache: bool = False) -> None",
+                        "line": 67,
+                        "doc": "Set up the agent.\n\nArgs:\n    knowledge_base: The searches behind the tools.\n    client: Gemini client.\n    usage: Counts the tokens and searches.\n    top_k: Documents each search returns.\n    max_searches: Searches allowed per question, counting the first one.\n    cache: Cache the conversation's start with Gemini (`ConversationCache`):\n        the first search's documents, and again after each general search.",
                         "decorators": [],
                         "is_async": false,
                         "children": []
@@ -5094,8 +5117,18 @@
                         "kind": "method",
                         "name": "config",
                         "signature": "(self, can_search: bool) -> types.GenerateContentConfig",
-                        "line": 87,
+                        "line": 97,
                         "doc": "Configure one turn.\n\nArgs:\n    can_search: Whether the agent may still call a search tool.\n\nReturns:\n    The turn's settings; without searches left, the tools are switched off.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "cached_config",
+                        "signature": "(self, cache_name: str) -> types.GenerateContentConfig",
+                        "line": 124,
+                        "doc": "Configure one turn that reads its start, instructions and tools from a cache.\n\nArgs:\n    cache_name: The Gemini cache.\n\nReturns:\n    The turn's settings; tools stay in automatic mode, as the cache fixes them.",
                         "decorators": [],
                         "is_async": false,
                         "children": []
@@ -5104,7 +5137,7 @@
                         "kind": "method",
                         "name": "tools",
                         "signature": "(self) -> types.Tool",
-                        "line": 114,
+                        "line": 141,
                         "doc": "The tools Gemini may call.\n\nReturns:\n    The general search and the keyword search.",
                         "decorators": [],
                         "is_async": false,
@@ -5114,7 +5147,7 @@
                         "kind": "method",
                         "name": "can_call",
                         "signature": "(self, budget: Budget) -> bool",
-                        "line": 122,
+                        "line": 149,
                         "doc": "Whether the agent may still call a tool.\n\nArgs:\n    budget: What the question has used so far.\n\nReturns:\n    True while searches are left.",
                         "decorators": [],
                         "is_async": false,
@@ -5124,7 +5157,7 @@
                         "kind": "method",
                         "name": "run_tool",
                         "signature": "(self, tool: str, arguments: dict[str, object], question: str, budget: Budget) -> tuple[dict[str, str], list[SearchHit]]",
-                        "line": 133,
+                        "line": 160,
                         "doc": "Run one tool call within the budget.\n\nArgs:\n    tool: Name of the called tool.\n    arguments: Its arguments.\n    question: The question, the query when the call gives none.\n    budget: What the question has used so far; updated.\n\nReturns:\n    What the model receives (the documents' text, or an error) and the documents\n    the call found.",
                         "decorators": [],
                         "is_async": false,
@@ -5134,7 +5167,7 @@
                         "kind": "method",
                         "name": "search",
                         "signature": "(self, tool: str, query: str) -> list[SearchHit]",
-                        "line": 155,
+                        "line": 182,
                         "doc": "Run the search a tool call asks for.\n\nArgs:\n    tool: Name of the called tool.\n    query: Its query.\n\nReturns:\n    The top documents.",
                         "decorators": [],
                         "is_async": false,
@@ -5143,9 +5176,9 @@
                       {
                         "kind": "method",
                         "name": "answer",
-                        "signature": "(self, question: str) -> SystemAnswer",
-                        "line": 170,
-                        "doc": "Search the question, then let the agent search more or answer.\n\nEvery step is recorded in the answer's trace: the instructions, the first message,\neach model turn with its thoughts and tool calls, and each search with its query\nand the documents it returned.\n\nArgs:\n    question: The question text.\n\nReturns:\n    The answer, every document the searches returned in the order found, and the\n    trace.",
+                        "signature": "(self, question: str, budget: Budget | None = None) -> SystemAnswer",
+                        "line": 197,
+                        "doc": "Search the question, then let the agent search more or answer.\n\nEvery step is recorded in the answer's trace: the instructions, the first message,\neach model turn with its thoughts and tool calls, and each search with its query\nand the documents it returned.\n\nArgs:\n    question: The question text.\n    budget: What the question may use, for agents that carry more in it (such as\n        someone to ask); a fresh `Budget` by default.\n\nReturns:\n    The answer, every document the searches returned in the order found, and the\n    trace.",
                         "decorators": [],
                         "is_async": false,
                         "children": []
@@ -5179,7 +5212,7 @@
                     "kind": "function",
                     "name": "search_function",
                     "signature": "(name: str, description: str, query_description: str) -> types.FunctionDeclaration",
-                    "line": 14,
+                    "line": 15,
                     "doc": "Describe one search tool that takes a single query.\n\nArgs:\n    name: Function name the model calls.\n    description: What the search does and when to use it.\n    query_description: How to write the query.\n\nReturns:\n    The function declaration.",
                     "decorators": [],
                     "is_async": false,
@@ -5189,7 +5222,7 @@
                     "kind": "function",
                     "name": "search_tools",
                     "signature": "() -> types.Tool",
-                    "line": 40,
+                    "line": 41,
                     "doc": "Describe the agent's two searches to Gemini.\n\nReturns:\n    The tool with the general search and the keyword search.",
                     "decorators": [],
                     "is_async": false,
@@ -5199,8 +5232,18 @@
                     "kind": "function",
                     "name": "snippet_tools",
                     "signature": "() -> types.Tool",
-                    "line": 62,
+                    "line": 63,
                     "doc": "Describe the snippet agent's tools: the general search, keyword snippets, full reads.\n\nReturns:\n    The general search, the keyword search that returns snippets, and the tool that\n    reads one document in full by its id.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "clarify_tools",
+                    "signature": "() -> types.Tool",
+                    "line": 99,
+                    "doc": "Describe the clarifying agent's tools: the snippet agent's, plus asking the person.\n\nReturns:\n    The snippet agent's three tools and `ask_user`, which takes one question.",
                     "decorators": [],
                     "is_async": false,
                     "children": []
@@ -5209,7 +5252,7 @@
                     "kind": "function",
                     "name": "tool_step",
                     "signature": "(tool: str, arguments: dict[str, object], hits: list[SearchHit], output: str) -> TraceStep",
-                    "line": 98,
+                    "line": 125,
                     "doc": "Record one search.\n\nArgs:\n    tool: The search tool.\n    arguments: Its arguments.\n    hits: The documents it returned.\n    output: What the model received: the documents' text, or an error.\n\nReturns:\n    The trace step.",
                     "decorators": [],
                     "is_async": false,
@@ -5219,11 +5262,70 @@
                     "kind": "function",
                     "name": "model_step",
                     "signature": "(response: types.GenerateContentResponse) -> TraceStep",
-                    "line": 121,
+                    "line": 148,
                     "doc": "Record one model turn: its text, thought summary, tool calls and tokens.\n\nArgs:\n    response: Gemini's response.\n\nReturns:\n    The trace step.",
                     "decorators": [],
                     "is_async": false,
                     "children": []
+                  }
+                ],
+                "children": []
+              },
+              {
+                "id": "EVAL.V2.F3",
+                "kind": "file",
+                "label": "evaluation/agent_cache.py",
+                "summary": "ConversationCache: Gemini context cache of the conversation's start, with fallback to uncached.",
+                "details": "`ConversationCache` holds at most one Gemini cache of the conversation prefix (instructions, tools, turns so far) and how many turns it covers, so later turns are billed at the cached rate. A new cache replaces the old one. A turn that must switch tools off cannot use it, and if a cache cannot be made (too few tokens, API error) the agent runs uncached. TTL is 300 seconds.",
+                "symbols": [
+                  "ConversationCache"
+                ],
+                "path": "src/train_rag/evaluation/agent_cache.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "class",
+                    "name": "ConversationCache",
+                    "signature": "",
+                    "line": 25,
+                    "doc": "Holds at most one cache of a conversation's start, and how many turns it covers.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": [
+                      {
+                        "kind": "method",
+                        "name": "__init__",
+                        "signature": "(self, client: genai.Client, usage: UsageMeter) -> None",
+                        "line": 28,
+                        "doc": "Start with no cache.\n\nArgs:\n    client: Gemini client.\n    usage: Counts the cache's writes and storage.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "store",
+                        "signature": "(self, instructions: str, tools: types.Tool, contents: list[types.Content]) -> None",
+                        "line": 40,
+                        "doc": "Cache the conversation so far, replacing any older cache.\n\nArgs:\n    instructions: The system instructions.\n    tools: The tools, fixed in automatic mode.\n    contents: The turns to cache, from the start.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "close",
+                        "signature": "(self) -> None",
+                        "line": 74,
+                        "doc": "Delete the cache, if there is one.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      }
+                    ]
                   }
                 ],
                 "children": []
@@ -5342,6 +5444,81 @@
             ]
           },
           {
+            "id": "EVAL.V5",
+            "kind": "variant",
+            "label": "agent-keywords",
+            "summary": "Snippet agent with separate budgets: few meaning searches, many keyword searches.",
+            "details": "`KeywordAgentSystem` extends `SnippetAgentSystem`. After the automatic first search it allows `MAX_SEMANTIC` (2) general searches and `MAX_KEYWORD` (10) keyword searches, so the agent can try many wordings, and its prompt tells it to paraphrase when a keyword search finds nothing. Results are matching lines with document ids; `read_document` reads a full document (`MAX_READS`). Over-budget calls get the `SEMANTIC_LIMIT` or `KEYWORD_LIMIT` message. It caches the conversation start via `ConversationCache`.",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": null,
+            "doc": null,
+            "command": null,
+            "outline": [],
+            "children": [
+              {
+                "id": "EVAL.V5.F1",
+                "kind": "file",
+                "label": "evaluation/agent_keywords.py",
+                "summary": "KeywordAgentSystem with split semantic and keyword search budgets.",
+                "details": null,
+                "symbols": [
+                  "KeywordAgentSystem"
+                ],
+                "path": "src/train_rag/evaluation/agent_keywords.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "class",
+                    "name": "KeywordAgentSystem",
+                    "signature": "(SnippetAgentSystem)",
+                    "line": 33,
+                    "doc": "The snippet agent with separate budgets for general and keyword searches.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": [
+                      {
+                        "kind": "method",
+                        "name": "__init__",
+                        "signature": "(self, knowledge_base: SnippetKnowledgeBase, client: genai.Client, usage: UsageMeter, top_k: int = 5, max_semantic: int = MAX_SEMANTIC, max_keyword: int = MAX_KEYWORD, max_reads: int = MAX_READS, keyword_results: int = KEYWORD_RESULTS, cache: bool = True) -> None",
+                        "line": 38,
+                        "doc": "Set up the agent.\n\nArgs:\n    knowledge_base: The searches and full reads behind the tools.\n    client: Gemini client.\n    usage: Counts the tokens and searches.\n    top_k: Documents the general search returns.\n    max_semantic: General searches allowed after the first, automatic one.\n    max_keyword: Keyword searches allowed.\n    max_reads: Documents the agent may read in full.\n    keyword_results: Documents each keyword search shows as snippets.\n    cache: Cache the conversation's start with Gemini: the first documents, and\n        again after each general search.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "can_call",
+                        "signature": "(self, budget: Budget) -> bool",
+                        "line": 84,
+                        "doc": "Whether any tool still has budget left.\n\nArgs:\n    budget: What the question has used so far.\n\nReturns:\n    True while general searches, keyword searches or reads are left.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "run_tool",
+                        "signature": "(self, tool: str, arguments: dict[str, object], question: str, budget: Budget) -> tuple[dict[str, str], list[SearchHit]]",
+                        "line": 99,
+                        "doc": "Run one tool call within that tool's own budget.\n\nArgs:\n    tool: Name of the called tool.\n    arguments: Its arguments.\n    question: The question, the query when a search call gives none.\n    budget: What the question has used so far; updated.\n\nReturns:\n    What the model receives and the documents the call showed it.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "children": []
+              }
+            ]
+          },
+          {
             "id": "EVAL.V4",
             "kind": "variant",
             "label": "agent-snippets",
@@ -5414,9 +5591,9 @@
                       {
                         "kind": "method",
                         "name": "__init__",
-                        "signature": "(self, knowledge_base: SnippetKnowledgeBase, client: genai.Client, usage: UsageMeter, top_k: int = 5, max_searches: int = MAX_SEARCHES, max_reads: int = MAX_READS, keyword_results: int = KEYWORD_RESULTS) -> None",
+                        "signature": "(self, knowledge_base: SnippetKnowledgeBase, client: genai.Client, usage: UsageMeter, top_k: int = 5, max_searches: int = MAX_SEARCHES, max_reads: int = MAX_READS, keyword_results: int = KEYWORD_RESULTS, cache: bool = False) -> None",
                         "line": 42,
-                        "doc": "Set up the agent.\n\nArgs:\n    knowledge_base: The searches and full reads behind the tools.\n    client: Gemini client.\n    usage: Counts the tokens and searches.\n    top_k: Documents the general search returns.\n    max_searches: Searches allowed per question, counting the first one.\n    max_reads: Documents the agent may read in full per question.\n    keyword_results: Documents the keyword search shows as snippets.",
+                        "doc": "Set up the agent.\n\nArgs:\n    knowledge_base: The searches and full reads behind the tools.\n    client: Gemini client.\n    usage: Counts the tokens and searches.\n    top_k: Documents the general search returns.\n    max_searches: Searches allowed per question, counting the first one.\n    max_reads: Documents the agent may read in full per question.\n    keyword_results: Documents the keyword search shows as snippets.\n    cache: Cache the conversation's start with Gemini.",
                         "decorators": [],
                         "is_async": false,
                         "children": []
@@ -5425,7 +5602,7 @@
                         "kind": "method",
                         "name": "tools",
                         "signature": "(self) -> types.Tool",
-                        "line": 75,
+                        "line": 77,
                         "doc": "The general search, the keyword snippets and the full read.\n\nReturns:\n    The tool declarations.",
                         "decorators": [],
                         "is_async": false,
@@ -5435,7 +5612,7 @@
                         "kind": "method",
                         "name": "can_call",
                         "signature": "(self, budget: Budget) -> bool",
-                        "line": 83,
+                        "line": 85,
                         "doc": "Whether the agent may still call a tool.\n\nArgs:\n    budget: What the question has used so far.\n\nReturns:\n    True while searches or reads are left.",
                         "decorators": [],
                         "is_async": false,
@@ -5445,8 +5622,18 @@
                         "kind": "method",
                         "name": "run_tool",
                         "signature": "(self, tool: str, arguments: dict[str, object], question: str, budget: Budget) -> tuple[dict[str, str], list[SearchHit]]",
-                        "line": 94,
+                        "line": 98,
                         "doc": "Run one tool call within its budget.\n\nArgs:\n    tool: Name of the called tool.\n    arguments: Its arguments.\n    question: The question, the query when a search call gives none.\n    budget: What the question has used so far; updated.\n\nReturns:\n    What the model receives and the documents the call showed it.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "keyword_snippets",
+                        "signature": "(self, query: str) -> tuple[dict[str, str], list[SearchHit]]",
+                        "line": 122,
+                        "doc": "Search by keywords and show each result as its matching lines.\n\nArgs:\n    query: The keywords.\n\nReturns:\n    The snippets as the model sees them, and the documents they come from.",
                         "decorators": [],
                         "is_async": false,
                         "children": []
@@ -5455,7 +5642,7 @@
                         "kind": "method",
                         "name": "read",
                         "signature": "(self, doc_id: str, budget: Budget) -> tuple[dict[str, str], list[SearchHit]]",
-                        "line": 121,
+                        "line": 138,
                         "doc": "Read one document in full, within the read budget.\n\nArgs:\n    doc_id: The document's id, as a search showed it.\n    budget: What the question has used so far; updated.\n\nReturns:\n    The document's text, or an error, and the document.",
                         "decorators": [],
                         "is_async": false,
@@ -5578,9 +5765,9 @@
                   {
                     "kind": "function",
                     "name": "evaluate",
-                    "signature": "(system_name: str, judge_name: str, question_type: QuestionType | None = None, limit: int | None = None, workers: int = 8, wrong_in: int | None = None) -> int",
-                    "line": 21,
-                    "doc": "Run one evaluation and print its report.\n\nArgs:\n    system_name: Name of a system in `SYSTEMS`.\n    judge_name: Name of a judge in `JUDGES`.\n    question_type: Only questions of this type, or None for all.\n    limit: Maximum number of questions, or None for all.\n    workers: Questions evaluated at the same time.\n    wrong_in: Only the questions this earlier run got wrong, or None for all.\n\nReturns:\n    The id of the stored run.",
+                    "signature": "(system_name: str, judge_name: str, question_type: QuestionType | None = None, limit: int | None = None, workers: int = 8, wrong_in: int | None = None, question_ids: list[str] | None = None) -> int",
+                    "line": 27,
+                    "doc": "Run one evaluation and print its report.\n\nArgs:\n    system_name: Name of a system in `SYSTEMS`.\n    judge_name: Name of a judge in `JUDGES`.\n    question_type: Only questions of this type, or None for all.\n    limit: Maximum number of questions, or None for all.\n    workers: Questions evaluated at the same time.\n    wrong_in: Only the questions this earlier run got wrong, or None for all.\n    question_ids: Only these questions, or None for all.\n\nReturns:\n    The id of the stored run.\n\nRaises:\n    ValueError: If an id isn't a known question, or, for the clarifying agent, a\n        question has no memory note. Checked before any paid call.",
                     "decorators": [],
                     "is_async": false,
                     "children": []
@@ -5589,7 +5776,7 @@
                     "kind": "function",
                     "name": "evaluate_search",
                     "signature": "(retriever_name: str, question_type: QuestionType | None = None, limit: int | None = None, sample: int | None = None) -> None",
-                    "line": 76,
+                    "line": 118,
                     "doc": "Measure how many expected documents a retriever finds, without an LLM.\n\nArgs:\n    retriever_name: Name of a retriever in `RETRIEVERS`.\n    question_type: Only questions of this type, or None for all.\n    limit: Maximum number of questions, or None for all.\n    sample: Sample size the BM25 index was built for, or None for the whole corpus.",
                     "decorators": [],
                     "is_async": false,
@@ -5603,7 +5790,7 @@
                 "kind": "file",
                 "label": "evaluation/pipeline.py",
                 "summary": "run_evaluation: threaded per-question answer, retrieval metrics and grade, stored in batches.",
-                "details": "`evaluate_question` answers, computes `document_recall` and `invalid_extra_docs`, then grades; a system exception is stored as `system: ...` and a judge exception as `judge: ...` on the result. `evaluate_questions` maps this over a `ThreadPoolExecutor` (8 workers by default), keeping question order. `run_evaluation` creates the run, stores results in batches of `BATCH_SIZE` = 50, and finishes it with the `RunSummary`.",
+                "details": "`evaluate_question` answers, computes `document_recall` and `invalid_extra_docs`, then grades; a system exception is stored as `system: ...` and a judge exception as `judge: ...` on the result. `evaluate_questions` maps this over a `ThreadPoolExecutor` (8 workers by default), keeping question order. `run_evaluation` creates the run, stores results in batches of `BATCH_SIZE` = 50, and finishes it with the `RunSummary`. `evaluate_question` takes an optional `person_factory`: a `ClarifyingSystem` gets a fresh `Person` per question, every other system sees only the question text.",
                 "symbols": [
                   "run_evaluation",
                   "evaluate_questions",
@@ -5619,9 +5806,9 @@
                   {
                     "kind": "function",
                     "name": "evaluate_question",
-                    "signature": "(system: RagSystem, judge: AnswerJudge, question: Question) -> QuestionResult",
-                    "line": 20,
-                    "doc": "Answer one question, measure retrieval and grade the answer.\n\nA failure in the system or the judge is recorded on the result instead of stopping\nthe run.\n\nArgs:\n    system: The evaluated RAG system.\n    judge: The answer judge.\n    question: The benchmark question.\n\nReturns:\n    The question's metrics, grade, or error.",
+                    "signature": "(system: RagSystem, judge: AnswerJudge, question: Question, person_factory: PersonFactory | None = None) -> QuestionResult",
+                    "line": 23,
+                    "doc": "Answer one question, measure retrieval and grade the answer.\n\nA failure in the system or the judge is recorded on the result instead of stopping\nthe run. A system that can ask gets a fresh person for the question when a factory is\ngiven; every other system sees only the question text.\n\nArgs:\n    system: The evaluated RAG system.\n    judge: The answer judge.\n    question: The benchmark question.\n    person_factory: Makes the person behind the question, or None for no one to ask.\n\nReturns:\n    The question's metrics, grade, or error.",
                     "decorators": [],
                     "is_async": false,
                     "children": []
@@ -5629,9 +5816,9 @@
                   {
                     "kind": "function",
                     "name": "evaluate_questions",
-                    "signature": "(system: RagSystem, judge: AnswerJudge, questions: Sequence[Question], workers: int = 8, progress: Progress | None = None) -> list[QuestionResult]",
-                    "line": 63,
-                    "doc": "Evaluate many questions in parallel.\n\nArgs:\n    system: The evaluated RAG system.\n    judge: The answer judge.\n    questions: Benchmark questions.\n    workers: Questions evaluated at the same time.\n    progress: Called with (done, total) after each question.\n\nReturns:\n    One result per question, in the questions' order.",
+                    "signature": "(system: RagSystem, judge: AnswerJudge, questions: Sequence[Question], workers: int = 8, progress: Progress | None = None, person_factory: PersonFactory | None = None) -> list[QuestionResult]",
+                    "line": 76,
+                    "doc": "Evaluate many questions in parallel.\n\nArgs:\n    system: The evaluated RAG system.\n    judge: The answer judge.\n    questions: Benchmark questions.\n    workers: Questions evaluated at the same time.\n    progress: Called with (done, total) after each question.\n    person_factory: Makes the person behind each question, for systems that can ask.\n\nReturns:\n    One result per question, in the questions' order.",
                     "decorators": [],
                     "is_async": false,
                     "children": []
@@ -5639,9 +5826,9 @@
                   {
                     "kind": "function",
                     "name": "run_evaluation",
-                    "signature": "(session: Session, dataset: str, system: RagSystem, judge: AnswerJudge, questions: Sequence[Question], workers: int = 8, progress: Progress | None = None) -> tuple[int, RunSummary]",
-                    "line": 97,
-                    "doc": "Evaluate a system on the questions and store the run with its results.\n\nArgs:\n    session: Active database session.\n    dataset: Dataset the questions come from.\n    system: The evaluated RAG system.\n    judge: The answer judge.\n    questions: Benchmark questions.\n    workers: Questions evaluated at the same time.\n    progress: Called with (done, total) after each question.\n\nReturns:\n    The run id and its summary.",
+                    "signature": "(session: Session, dataset: str, system: RagSystem, judge: AnswerJudge, questions: Sequence[Question], workers: int = 8, progress: Progress | None = None, person_factory: PersonFactory | None = None) -> tuple[int, RunSummary]",
+                    "line": 112,
+                    "doc": "Evaluate a system on the questions and store the run with its results.\n\nArgs:\n    session: Active database session.\n    dataset: Dataset the questions come from.\n    system: The evaluated RAG system.\n    judge: The answer judge.\n    questions: Benchmark questions.\n    workers: Questions evaluated at the same time.\n    progress: Called with (done, total) after each question.\n    person_factory: Makes the person behind each question, for systems that can ask.\n\nReturns:\n    The run id and its summary.",
                     "decorators": [],
                     "is_async": false,
                     "children": []
@@ -5907,7 +6094,7 @@
                     "kind": "class",
                     "name": "UsageMeter",
                     "signature": "",
-                    "line": 13,
+                    "line": 18,
                     "doc": "Adds up the tokens of Gemini responses; safe to share between worker threads.",
                     "decorators": [],
                     "is_async": false,
@@ -5916,7 +6103,7 @@
                         "kind": "method",
                         "name": "__init__",
                         "signature": "(self) -> None",
-                        "line": 16,
+                        "line": 21,
                         "doc": "Start from zero.",
                         "decorators": [],
                         "is_async": false,
@@ -5926,8 +6113,18 @@
                         "kind": "method",
                         "name": "add",
                         "signature": "(self, response: types.GenerateContentResponse) -> None",
-                        "line": 25,
+                        "line": 33,
                         "doc": "Count one response's tokens.\n\nArgs:\n    response: A Gemini response.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "add_cache_write",
+                        "signature": "(self, tokens: int, ttl_seconds: int) -> None",
+                        "line": 51,
+                        "doc": "Count one context cache: writing its tokens, and storing them for its TTL.\n\nArgs:\n    tokens: Tokens the cache holds.\n    ttl_seconds: How long it is kept; storage is billed for all of it.",
                         "decorators": [],
                         "is_async": false,
                         "children": []
@@ -5936,7 +6133,7 @@
                         "kind": "method",
                         "name": "add_searches",
                         "signature": "(self, count: int) -> None",
-                        "line": 41,
+                        "line": 62,
                         "doc": "Count knowledge-base searches an agent made.\n\nArgs:\n    count: Searches made.",
                         "decorators": [],
                         "is_async": false,
@@ -5946,7 +6143,7 @@
                         "kind": "method",
                         "name": "cost",
                         "signature": "(self) -> float",
-                        "line": 50,
+                        "line": 71,
                         "doc": "Price the counted tokens.\n\nReturns:\n    Dollars at Gemini 3.8 Flash standard prices.",
                         "decorators": [],
                         "is_async": false,
@@ -5956,7 +6153,7 @@
                         "kind": "method",
                         "name": "report",
                         "signature": "(self) -> str",
-                        "line": 60,
+                        "line": 87,
                         "doc": "Summarize the spend in one line.\n\nReturns:\n    Calls, tokens and cost.",
                         "decorators": [],
                         "is_async": false,
@@ -6301,6 +6498,831 @@
             "side": false,
             "note_kind": "style",
             "doc": null,
+            "command": null,
+            "outline": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "CLAR",
+        "kind": "module",
+        "label": "Clarifying questions",
+        "summary": "Lets the snippet agent ask a simulated person up to 3 questions, then scores it against zero-shot.",
+        "details": "Measures accuracy with clarification: 46 semantic questions fail because search cannot single out the right document among near-duplicates, so the agent may ask the person behind the question, played by Gemini.\n\nFlow:\n- `write-memories` (`clarify.write_memories`) loads each question's right document and has Gemini write a short memory note (`memory_notes.write_note`), about a quarter with one wrong detail; notes are stored one by one in Postgres.\n- `evaluate --system agent-snippets-clarify --question-ids FILE` builds a `SimulatedPerson` per question from its note and runs `ClarifyingSnippetAgent.answer_with`; it refuses to start if a note is missing.\n- `clarify-report` (`clarify.report_clarification`) compares a run to a zero-shot baseline, split by clean notes and wrong-detail notes, and counts asks from the trace.\n\nData comes from the evaluation, repository and processing modules; start reading at `agent_clarify.py`, then `person.py`.",
+        "symbols": [],
+        "path": null,
+        "side": false,
+        "note_kind": null,
+        "doc": null,
+        "command": "train-rag write-memories --question-ids FILE | train-rag evaluate --system agent-snippets-clarify --question-ids FILE | train-rag clarify-report --run N --baseline M --question-ids FILE",
+        "outline": [],
+        "children": [
+          {
+            "id": "CLAR.B",
+            "kind": "base",
+            "label": "ClarifyingSnippetAgent",
+            "summary": "Snippet agent plus an ask_user tool with its own budget of 3 questions.",
+            "details": "Contract: a `ClarifyingSystem` (from `evaluation/system.py`) implements `answer_with(question, person)`; here it reuses `SnippetAgentSystem`'s loop and only overrides `tools`, `can_call` and `run_tool`.\n\n- `ask_user` calls go to `person.reply`, never touching search budgets, except each answered ask grants `SEARCHES_PER_REPLY = 2` extra searches so the agent can act on the reply.\n- `MAX_ASKS = 3` per question; `MAX_REFUSED = 2` refused tool calls end the loop so a model can not spin on used-up tools.\n- The agent sees only the person's replies, never the note or gold answer.\n\nA new clarifying system must subclass `ClarifyingSystem` and accept a `Person`.",
+            "symbols": [
+              "ClarifyingSnippetAgent",
+              "ClarifyingSnippetAgent.answer_with",
+              "ClarifyBudget",
+              "ClarifyingSnippetAgent.call"
+            ],
+            "path": null,
+            "side": false,
+            "note_kind": null,
+            "doc": null,
+            "command": null,
+            "outline": [],
+            "children": [
+              {
+                "id": "CLAR.B.F1",
+                "kind": "file",
+                "label": "evaluation/agent_clarify.py",
+                "summary": "ClarifyingSnippetAgent and ClarifyBudget.",
+                "details": null,
+                "symbols": [
+                  "ClarifyingSnippetAgent",
+                  "ClarifyBudget"
+                ],
+                "path": "src/train_rag/evaluation/agent_clarify.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "class",
+                    "name": "ClarifyBudget",
+                    "signature": "(Budget)",
+                    "line": 40,
+                    "doc": "A question's budget, plus the person to ask and how many questions were asked.",
+                    "decorators": [
+                      "dataclass"
+                    ],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "class",
+                    "name": "ClarifyingSnippetAgent",
+                    "signature": "(SnippetAgentSystem, ClarifyingSystem)",
+                    "line": 48,
+                    "doc": "The snippet agent with an `ask_user` tool and its own budget of questions.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": [
+                      {
+                        "kind": "method",
+                        "name": "__init__",
+                        "signature": "(self, knowledge_base: SnippetKnowledgeBase, client: genai.Client, usage: UsageMeter, max_asks: int = MAX_ASKS, max_searches: int = MAX_SEARCHES, max_reads: int = MAX_READS) -> None",
+                        "line": 53,
+                        "doc": "Set up the agent.\n\nArgs:\n    knowledge_base: The searches and full reads behind the tools.\n    client: Gemini client.\n    usage: Counts the tokens and searches.\n    max_asks: Questions the agent may ask the person per question.\n    max_searches: Searches allowed per question, counting the first one.\n    max_reads: Documents the agent may read in full per question.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "tools",
+                        "signature": "(self) -> types.Tool",
+                        "line": 80,
+                        "doc": "The snippet agent's tools and `ask_user`.\n\nReturns:\n    The tool declarations.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "answer_with",
+                        "signature": "(self, question: str, person: Person) -> SystemAnswer",
+                        "line": 88,
+                        "doc": "Answer one question, with the person to ask.\n\nArgs:\n    question: The question text.\n    person: The person who asked.\n\nReturns:\n    The answer, the documents found and the trace, asks included.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "can_call",
+                        "signature": "(self, budget: Budget) -> bool",
+                        "line": 100,
+                        "doc": "Whether the agent may still call a tool: searches, reads or questions left.\n\nArgs:\n    budget: What the question has used so far.\n\nReturns:\n    True while anything is left.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "run_tool",
+                        "signature": "(self, tool: str, arguments: dict[str, object], question: str, budget: Budget) -> tuple[dict[str, str], list[SearchHit]]",
+                        "line": 115,
+                        "doc": "Run one tool call; questions go to the person, within their own budget.\n\nArgs:\n    tool: Name of the called tool.\n    arguments: Its arguments.\n    question: The question, the query when a search call gives none.\n    budget: What the question has used so far; updated.\n\nReturns:\n    What the model receives and the documents the call showed it (none for a\n    question to the person).",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "call",
+                        "signature": "(self, tool: str, arguments: dict[str, object], question: str, budget: Budget) -> tuple[dict[str, str], list[SearchHit]]",
+                        "line": 136,
+                        "doc": "Run one tool call: questions to the person here, everything else as before.\n\nArgs:\n    tool: Name of the called tool.\n    arguments: Its arguments.\n    question: The question, the query when a search call gives none.\n    budget: What the question has used so far; updated.\n\nReturns:\n    What the model receives and the documents the call showed it.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "children": []
+              },
+              {
+                "id": "CLAR.B.N1",
+                "kind": "note",
+                "label": "Extension by subclass override",
+                "summary": "Reuses the snippet agent's loop; only call/can_call/tools change.",
+                "details": "`ClarifyingSnippetAgent(SnippetAgentSystem, ClarifyingSystem)` overrides `tools()` to return `clarify_tools()`, `can_call` to keep going while asks are left, and `run_tool` to count refused calls. `call` intercepts `ASK_TOOL` and delegates every other tool to `super().run_tool`. `ClarifyBudget` extends the shared `Budget` dataclass with person, asks and refused, so the base loop needs no change.",
+                "symbols": [],
+                "path": null,
+                "side": false,
+                "note_kind": "pattern",
+                "doc": null,
+                "command": null,
+                "outline": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "CLAR.G1",
+            "kind": "group",
+            "label": "Files",
+            "summary": "Person, note writing, report and the two commands.",
+            "details": "The pieces around the agent: the simulated person, the note writer and its checks, the report and the CLI entry functions.",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": null,
+            "doc": null,
+            "command": null,
+            "outline": [],
+            "children": [
+              {
+                "id": "CLAR.G1.F1",
+                "kind": "file",
+                "label": "clarify.py",
+                "summary": "write_memories and report_clarification, the two CLI commands.",
+                "details": "`write_memories` picks wrong-detail questions with `pick_wrong` over the whole id list, writes notes with Gemini, saves each at once via `upsert_memories`, and prints them for review with LEAK? and NUMBER? markers. `--redo` rewrites a subset and keeps each note's clean-or-wrong choice. `report_clarification` loads two runs' results and prints `clarify_report`.",
+                "symbols": [
+                  "write_memories",
+                  "report_clarification",
+                  "right_documents"
+                ],
+                "path": "src/train_rag/clarify.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "function",
+                    "name": "right_documents",
+                    "signature": "(session: Session, doc_ids: Sequence[str]) -> dict[str, tuple[str, str]]",
+                    "line": 36,
+                    "doc": "Load the title and normalized full text of documents.\n\nArgs:\n    session: Active database session.\n    doc_ids: Dataset ids of the documents.\n\nReturns:\n    (title, title + text) keyed by dataset id.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "write_memories",
+                    "signature": "(question_ids: list[str], redo: list[str] | None = None) -> None",
+                    "line": 52,
+                    "doc": "Write and store the memory note of every question, then print them for review.\n\nWhich notes get a wrong detail is picked from the whole id list, so rewriting some\nnotes with `redo` keeps each one's clean-or-wrong choice.\n\nArgs:\n    question_ids: All questions of the evaluation.\n    redo: Only rewrite these (a subset of `question_ids`), or None for all.\n\nRaises:\n    ValueError: If an id is unknown or a right document is missing.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "report_clarification",
+                    "signature": "(run_id: int, baseline_id: int, question_ids: list[str]) -> None",
+                    "line": 128,
+                    "doc": "Print the clarification report of a run against a zero-shot run.\n\nArgs:\n    run_id: The run with clarifying questions.\n    baseline_id: The zero-shot run on the same questions.\n    question_ids: The questions to compare.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  }
+                ],
+                "children": []
+              },
+              {
+                "id": "CLAR.G1.F2",
+                "kind": "file",
+                "label": "person.py",
+                "summary": "Person protocol and SimulatedPerson (Gemini that knows only the note).",
+                "details": "`SimulatedPerson` builds its system prompt from the question and note, keeps the exchange history so later asks are consistent, uses low thinking, and falls back to \"I don't remember.\" on empty output.",
+                "symbols": [
+                  "Person",
+                  "SimulatedPerson.reply"
+                ],
+                "path": "src/train_rag/evaluation/person.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "class",
+                    "name": "Person",
+                    "signature": "(Protocol)",
+                    "line": 14,
+                    "doc": "Someone the agent can ask about the question they asked.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": [
+                      {
+                        "kind": "method",
+                        "name": "reply",
+                        "signature": "(self, ask: str) -> str",
+                        "line": 17,
+                        "doc": "Answer one of the agent's questions.\n\nArgs:\n    ask: The agent's question.\n\nReturns:\n    The person's reply.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "class",
+                    "name": "SimulatedPerson",
+                    "signature": "",
+                    "line": 29,
+                    "doc": "Gemini playing the employee who asked, knowing only their memory note.\n\nIt never sees the right document or the gold answer: only the question, the note and\nthe exchange so far, so its replies can't hold more than the note does.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": [
+                      {
+                        "kind": "method",
+                        "name": "__init__",
+                        "signature": "(self, client: genai.Client, usage: UsageMeter, question: str, note: MemoryNote) -> None",
+                        "line": 36,
+                        "doc": "Set up the person for one question.\n\nArgs:\n    client: Gemini client.\n    usage: Counts the tokens of the replies.\n    question: The question the person asked.\n    note: What they remember.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      },
+                      {
+                        "kind": "method",
+                        "name": "reply",
+                        "signature": "(self, ask: str) -> str",
+                        "line": 52,
+                        "doc": "Answer the agent, keeping the exchange for later questions.\n\nArgs:\n    ask: The agent's question.\n\nReturns:\n    One short reply.",
+                        "decorators": [],
+                        "is_async": false,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "children": []
+              },
+              {
+                "id": "CLAR.G1.F3",
+                "kind": "file",
+                "label": "memory_notes.py",
+                "summary": "Note writer, wrong-detail picker and leak checks.",
+                "details": "`pick_wrong` samples 25% of sorted ids with seed 7. `write_note` asks Gemini for a JSON `NoteDraft` and raises if a wrong note has no `wrong_detail`. `leaks_title` flags two consecutive title words of 4+ chars; `has_number` flags digits. `write_each` saves per item and collects failures.",
+                "symbols": [
+                  "write_note",
+                  "pick_wrong",
+                  "leaks_title",
+                  "has_number",
+                  "write_each"
+                ],
+                "path": "src/train_rag/evaluation/memory_notes.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "function",
+                    "name": "pick_wrong",
+                    "signature": "(question_ids: Sequence[str], share: float = WRONG_SHARE, seed: int = SEED) -> set[str]",
+                    "line": 29,
+                    "doc": "Choose the questions whose note gets a misremembered detail.\n\nThe choice depends only on the ids, the share and the seed, not on their order.\n\nArgs:\n    question_ids: All questions that get a note.\n    share: Share of them to pick.\n    seed: Random seed.\n\nReturns:\n    The picked question ids.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "leaks_title",
+                    "signature": "(note: str, title: str) -> bool",
+                    "line": 49,
+                    "doc": "Tell whether a note copies the document's title: two long title words in a row.\n\nArgs:\n    note: The memory note.\n    title: The right document's title.\n\nReturns:\n    True when two consecutive title words of `LEAK_WORD_CHARS`+ characters appear\n    consecutively in the note.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "has_number",
+                    "signature": "(note: str) -> bool",
+                    "line": 71,
+                    "doc": "Tell whether a note holds a digit: numbers, ids and dates should not be in it.\n\nArgs:\n    note: The memory note.\n\nReturns:\n    True when the note contains any digit, for the reviewer to check.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "write_each",
+                    "signature": "(items: Sequence[T], write: Callable[[T], MemoryNote], save: Callable[[MemoryNote], None]) -> dict[T, str]",
+                    "line": 83,
+                    "doc": "Write and save notes one at a time, so one failure doesn't lose the others.\n\nArgs:\n    items: What to write a note for, e.g. questions.\n    write: Writes one note.\n    save: Stores one note as soon as it is written.\n\nReturns:\n    The items that failed, with their error.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "class",
+                    "name": "NoteDraft",
+                    "signature": "(BaseModel)",
+                    "line": 110,
+                    "doc": "The note writer's reply.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "write_note",
+                    "signature": "(client: genai.Client, usage: UsageMeter, question: Question, document: str, wrong: bool) -> MemoryNote",
+                    "line": 117,
+                    "doc": "Write what the person behind a question remembers about its document.\n\nArgs:\n    client: Gemini client.\n    usage: Counts the tokens.\n    question: The question, with its gold answer (shown so the note can avoid it).\n    document: The right document's text.\n    wrong: Whether the note must hold one slightly wrong detail.\n\nReturns:\n    The note; `wrong_detail` is set only when `wrong` is True.\n\nRaises:\n    ValueError: If a note meant to hold a wrong detail doesn't say which one.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  }
+                ],
+                "children": []
+              },
+              {
+                "id": "CLAR.G1.F4",
+                "kind": "file",
+                "label": "clarify_report.py",
+                "summary": "Markdown report and id-file helpers.",
+                "details": "`clarify_report` builds a table of zero-shot, with-clarification, clean-note and wrong-detail accuracy plus ask counts; `count_asks` counts `ask_user` steps in a trace; `read_question_ids` skips blanks and # comments; `missing_memories` guards the run.",
+                "symbols": [
+                  "clarify_report",
+                  "count_asks",
+                  "read_question_ids",
+                  "missing_memories"
+                ],
+                "path": "src/train_rag/evaluation/clarify_report.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "function",
+                    "name": "read_question_ids",
+                    "signature": "(path: Path) -> list[str]",
+                    "line": 11,
+                    "doc": "Read question ids from a file: one per line, `#` comments and blank lines skipped.\n\nArgs:\n    path: The file.\n\nReturns:\n    The ids, in file order.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "missing_memories",
+                    "signature": "(question_ids: Sequence[str], memories: Mapping[str, MemoryNote]) -> list[str]",
+                    "line": 25,
+                    "doc": "List the questions that have no memory note.\n\nArgs:\n    question_ids: Questions to check.\n    memories: Stored notes keyed by question id.\n\nReturns:\n    The ids without a note, in the given order.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "count_asks",
+                    "signature": "(trace: Sequence[Mapping[str, Any]]) -> int",
+                    "line": 38,
+                    "doc": "Count the questions an agent put to the person in one answer's trace.\n\nArgs:\n    trace: The stored trace steps.\n\nReturns:\n    The number of `ask_user` calls.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "row",
+                    "signature": "(name: str, correct: Sequence[bool | None]) -> str",
+                    "line": 50,
+                    "doc": "One table row: questions, correct answers and accuracy; ungraded counts as wrong.\n\nArgs:\n    name: Row label.\n    correct: Each question's verdict.\n\nReturns:\n    The Markdown row.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "clarify_report",
+                    "signature": "(baseline: Mapping[str, bool | None], run: Mapping[str, bool | None], asks: Mapping[str, int], memories: Mapping[str, MemoryNote]) -> str",
+                    "line": 66,
+                    "doc": "Compare zero-shot and clarified accuracy, split by clean and misremembered notes.\n\nArgs:\n    baseline: Each question's verdict in the zero-shot run.\n    run: Each question's verdict in the run with clarifying questions.\n    asks: Questions the agent asked, per question (missing means none).\n    memories: The notes, to tell clean ones from ones with a wrong detail.\n\nReturns:\n    A Markdown table and two lines on how often the agent asked.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  }
+                ],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "CLAR.G2",
+            "kind": "group",
+            "label": "Also uses",
+            "summary": "Memory note model, table and repository.",
+            "details": "Storage of the notes: a pydantic model, a SQLModel table and load/upsert functions.",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": null,
+            "doc": null,
+            "command": null,
+            "outline": [],
+            "children": [
+              {
+                "id": "CLAR.G2.U1",
+                "kind": "file",
+                "label": "models/memory.py",
+                "summary": "MemoryNote with a clean property.",
+                "details": null,
+                "symbols": [
+                  "MemoryNote"
+                ],
+                "path": "src/train_rag/models/memory.py",
+                "side": true,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "class",
+                    "name": "MemoryNote",
+                    "signature": "(BaseModel)",
+                    "line": 6,
+                    "doc": "A person's memory of the document they are asking about: big picture, few details.\n\nSome notes hold one detail that is slightly wrong, as human memory often is;\n`wrong_detail` says which, so those questions can be scored apart.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": [
+                      {
+                        "kind": "method",
+                        "name": "clean",
+                        "signature": "(self) -> bool",
+                        "line": 18,
+                        "doc": "Tell whether every detail in the note is true.\n\nReturns:\n    True when the note has no misremembered detail.",
+                        "decorators": [
+                          "property"
+                        ],
+                        "is_async": false,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "children": []
+              },
+              {
+                "id": "CLAR.G2.U2",
+                "kind": "file",
+                "label": "repository/question_memory.py",
+                "summary": "load_memories and upsert_memories.",
+                "details": null,
+                "symbols": [
+                  "load_memories",
+                  "upsert_memories"
+                ],
+                "path": "src/train_rag/repository/question_memory.py",
+                "side": true,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "function",
+                    "name": "upsert_memories",
+                    "signature": "(session: Session, records: Sequence[QuestionMemoryRecord]) -> None",
+                    "line": 12,
+                    "doc": "Store memory notes, replacing the stored note of a question that already has one.\n\nArgs:\n    session: Active database session.\n    records: Notes to store.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "load_memories",
+                    "signature": "(session: Session, question_ids: Sequence[str]) -> dict[str, MemoryNote]",
+                    "line": 34,
+                    "doc": "Load the memory notes of questions.\n\nArgs:\n    session: Active database session.\n    question_ids: Questions to load; ones without a note are left out.\n\nReturns:\n    Notes keyed by question id.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  }
+                ],
+                "children": []
+              },
+              {
+                "id": "CLAR.G2.U3",
+                "kind": "file",
+                "label": "tables/question_memory.py",
+                "summary": "QuestionMemoryRecord table with model and prompt version.",
+                "details": null,
+                "symbols": [
+                  "QuestionMemoryRecord"
+                ],
+                "path": "src/train_rag/tables/question_memory.py",
+                "side": true,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "class",
+                    "name": "QuestionMemoryRecord",
+                    "signature": "(SQLModel, table=True)",
+                    "line": 9,
+                    "doc": "What the person behind one question remembers, and how the note was written.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  }
+                ],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "CLAR.N1",
+            "kind": "note",
+            "label": "Misremembered details and anti-leak checks",
+            "summary": "Notes avoid answers and hold a labelled wrong detail 25% of the time.",
+            "details": "The design lists anti-goals: notes that give the answer away (titles, ids, numbers, dates) would only measure leakage, and a person who over-answers is unrealistic. Hence the prompt forbids them and `leaks_title` and `has_number` flag violations for human review. About a quarter of notes carry one plausible wrong detail (e.g. Jira vs Linear), always labelled in `wrong_detail` so the report can split accuracy by clean and wrong notes.",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": "why",
+            "doc": "docs/superpowers/specs/2026-11-09-clarification-eval-design.md",
+            "command": null,
+            "outline": [],
+            "children": []
+          },
+          {
+            "id": "CLAR.N2",
+            "kind": "note",
+            "label": "Person sees only the note",
+            "summary": "The agent sees replies only; the person sees note, not document or answer.",
+            "details": "`SimulatedPerson` is given the question and note only, so replies can not hold more than the note does; the agent only sees replies. `evaluate` aborts before any paid call if a question has no note (`missing_memories`).",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": "why",
+            "doc": "docs/superpowers/plans/2026-11-09-clarification-eval.md",
+            "command": null,
+            "outline": [],
+            "children": []
+          },
+          {
+            "id": "CLAR.N3",
+            "kind": "note",
+            "label": "Per-item saving and review printing",
+            "summary": "Each note is saved as written so a failure loses nothing.",
+            "details": "`write_each` and the `save` closure commit every note at once; failures are collected and reported with a ready `--redo` command line. Fits the project's long-run habit of progress tracking via `RunProgress`.",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": "style",
+            "doc": null,
+            "command": null,
+            "outline": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "TRAIN",
+        "kind": "module",
+        "label": "Training data for the embedder",
+        "summary": "Builds synthetic training questions with hard negatives to fine-tune the embedding model.",
+        "details": "Produces about 2,000 train and 400 dev questions, each with its source document as positive and up to 5 hard negatives, so the embedder can be fine-tuned without touching the 500 benchmark questions (kept as a once-only test).\n\nFlow, run through scripts in `exploration/training_questions/` (not files of this module):\n- `sources.py`: picks source documents per type and source using the quotas, excluding the benchmark's right documents and their 20 nearest gte neighbours, dev first.\n- `generate.py`: writes one question per document with DeepSeek via a small LangGraph, using the benchmark's prompts; answers are cleaned with `clean_question`.\n- `mine.py`: searches (gte + BM25, RRF to 50), reranks with the source added, then applies `pick_negatives`; writes training_set.jsonl and dev_set.jsonl.\n\nRead `quotas.py` first, then `drop_rule.py`. Uses the search and reranker from the retrieval modules.",
+        "symbols": [],
+        "path": null,
+        "side": false,
+        "note_kind": null,
+        "doc": null,
+        "command": null,
+        "outline": [],
+        "children": [
+          {
+            "id": "TRAIN.G1",
+            "kind": "group",
+            "label": "Files",
+            "summary": "The three home files: mix, question cleaning and the negative drop rule.",
+            "details": "Small pure-function modules with no I/O; the scripts in exploration/training_questions/ call them. Tests live in tests/training/.",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": null,
+            "doc": null,
+            "command": null,
+            "outline": [],
+            "children": [
+              {
+                "id": "TRAIN.G1.F1",
+                "kind": "file",
+                "label": "quotas.py",
+                "summary": "How many questions per type and source, and which documents qualify.",
+                "details": "`TYPE_WEIGHTS` (175/125/40/20) and `SOURCE_WEIGHTS` copy the benchmark's mix (paper Table 10). `split_by_weight` divides a total by largest remainder so counts sum exactly. `is_usable_source` requires 200 chars, or 3000 for intra-document reasoning.",
+                "symbols": [
+                  "split_by_weight",
+                  "is_usable_source",
+                  "TYPE_WEIGHTS",
+                  "SOURCE_WEIGHTS"
+                ],
+                "path": "src/train_rag/training/quotas.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "function",
+                    "name": "split_by_weight",
+                    "signature": "(total: int, weights: Mapping[str, int]) -> dict[str, int]",
+                    "line": 36,
+                    "doc": "Split a total in proportion to weights, rounding by largest remainder.\n\nArgs:\n    total: The number to split.\n    weights: Weight per key; a zero weight gets nothing.\n\nReturns:\n    A count per key; the counts sum to `total`.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "is_usable_source",
+                    "signature": "(char_count: int, question_type: str) -> bool",
+                    "line": 56,
+                    "doc": "Tell whether a document is long enough to write a question of this type from.\n\nArgs:\n    char_count: The document's length in characters.\n    question_type: The question type.\n\nReturns:\n    True if the document can be a source.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  }
+                ],
+                "children": []
+              },
+              {
+                "id": "TRAIN.G1.F2",
+                "kind": "file",
+                "label": "drop_rule.py",
+                "summary": "Picks hard negatives just below the reranker's biggest score drop.",
+                "details": "`biggest_drop` finds the largest gap between neighbouring scores in the top 30 and returns how many documents sit above it. `pick_negatives` returns up to 5 ids below the drop (not evaluation docs, scoring under the positive), or None if the positive is not above the drop. `candidates_with_positive` appends the source if search missed it.",
+                "symbols": [
+                  "pick_negatives",
+                  "biggest_drop",
+                  "candidates_with_positive"
+                ],
+                "path": "src/train_rag/training/drop_rule.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "function",
+                    "name": "biggest_drop",
+                    "signature": "(scores: Sequence[float], window: int = WINDOW) -> int",
+                    "line": 17,
+                    "doc": "Count the documents above the biggest drop between neighbouring scores.\n\nArgs:\n    scores: Scores sorted from high to low.\n    window: How many top documents may sit above the drop.\n\nReturns:\n    How many documents sit above the drop.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "pick_negatives",
+                    "signature": "(scores: Mapping[str, float], positive: str, excluded: AbstractSet[str], count: int = NEGATIVES, window: int = WINDOW) -> list[str] | None",
+                    "line": 35,
+                    "doc": "Choose hard negatives for a question, or skip it.\n\nArgs:\n    scores: Reranker score of the source document and every candidate.\n    positive: The source document's id.\n    excluded: Documents that may never be negatives (evaluation documents).\n    count: Most negatives to return.\n    window: How many top documents may sit above the drop.\n\nReturns:\n    Up to `count` document ids just below the drop, best first; None when the source\n    document isn't above the drop or no negative is left.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "candidates_with_positive",
+                    "signature": "(fused: Sequence[str], positive: str) -> list[str]",
+                    "line": 68,
+                    "doc": "Make sure the source document is scored with the search's candidates.\n\nArgs:\n    fused: The search's candidate doc ids, best first.\n    positive: The source document's id.\n\nReturns:\n    The candidates, with the source document appended if search missed it.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  }
+                ],
+                "children": [
+                  {
+                    "id": "TRAIN.G1.F2.N1",
+                    "kind": "note",
+                    "label": "Drop rule instead of an LLM judge",
+                    "summary": "Documents above the drop may be false negatives, so negatives come only from below it.",
+                    "details": "Brainstorm 003 proposed a judge on every near candidate (about $24 for 2,000 questions with Gemini). Brainstorm 004 found the reranker's biggest drop can replace it: documents above it may also answer the question, so they are dropped, and a question whose source is not above the drop is ambiguous and skipped. The user chose this rule on 11 November; a fixed 0.02 cut is kept for comparison.",
+                    "symbols": [],
+                    "path": null,
+                    "side": false,
+                    "note_kind": "why",
+                    "doc": "docs/brainstorm/004_reranker_grey_zone.md",
+                    "command": null,
+                    "outline": [],
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "TRAIN.G1.F3",
+                "kind": "file",
+                "label": "questions.py",
+                "summary": "Cleans an LLM answer into one question.",
+                "details": "`clean_question` takes the first non-empty line, strips markdown emphasis, quotes and a Query:/Question: prefix, and returns None when empty or over 400 characters.",
+                "symbols": [
+                  "clean_question"
+                ],
+                "path": "src/train_rag/training/questions.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "function",
+                    "name": "clean_question",
+                    "signature": "(raw: str) -> str | None",
+                    "line": 9,
+                    "doc": "Turn a model's answer into one clean question.\n\nTakes the first non-empty line, then strips markdown emphasis, surrounding quotes and a\n\"Query:\" or \"Question:\" prefix.\n\nArgs:\n    raw: The model's answer.\n\nReturns:\n    The question, or None if nothing usable is left or it's longer than `MAX_CHARS`.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  }
+                ],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "TRAIN.N1",
+            "kind": "note",
+            "label": "Benchmark mix, own questions",
+            "summary": "The generated set mirrors the benchmark so training matches the test, without reusing its questions.",
+            "details": "Training on the benchmark's 500 questions would make the test a memory test. So questions are generated with the benchmark's own public prompts and the same type and source mix (`quotas.py`). The right documents of all 500 questions and their 20 nearest gte neighbours are excluded as sources and as negatives, and a dev set drawn first is held out the same way, so tuning never touches the test set.",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": "why",
+            "doc": "docs/brainstorm/005_synthetic_training_questions.md",
+            "command": null,
+            "outline": [],
+            "children": []
+          },
+          {
+            "id": "TRAIN.N2",
+            "kind": "note",
+            "label": "Pure functions, scripts do the I/O",
+            "summary": "Logic lives in small tested functions; database, LLM and reranker calls stay in scripts.",
+            "details": "The module has no database or model calls: functions take scores, counts or strings and return plain lists or dicts, so they are tested in tests/training/. The long, costly steps (generation, about 2.5 h of reranking) run from scripts that cache results and resume on rerun.",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": "style",
+            "doc": null,
+            "command": null,
+            "outline": [],
+            "children": []
+          },
+          {
+            "id": "TRAIN.N3",
+            "kind": "note",
+            "label": "Why hard negatives",
+            "summary": "gte separates topics but not near-duplicates, so training needs near-duplicate negatives.",
+            "details": "Brainstorm 003: gte adds only about 3% over BM25, a question scores 0.74 against its own top 50 versus 0.56 against another's, and its top 50 spans only 0.05 cosine. Random negatives would teach nothing new, so negatives are reranked near-duplicates of the right document.",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": "why",
+            "doc": "docs/brainstorm/003_negative_sampling_dataset.md",
             "command": null,
             "outline": [],
             "children": []
@@ -8099,6 +9121,123 @@
                     "decorators": [],
                     "is_async": false,
                     "children": []
+                  }
+                ],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "STORE.V8",
+            "kind": "variant",
+            "label": "Question memories",
+            "summary": "One memory note per failure question, read by the simulated person (CLAR).",
+            "details": "Stores what the clarifying-question evaluation's simulated person remembers about each question: a short note written once by `write-memories` and never rewritten before a report is final.\n\n- `tables/question_memory.py`: the `question_memories` table.\n- `repository/question_memory.py`: read and save notes per question.\n- `models/memory.py`: the pydantic shape of a note.\n\nUsed by the CLAR module (`memory_notes.py`, `person.py`).",
+            "symbols": [],
+            "path": null,
+            "side": false,
+            "note_kind": null,
+            "doc": null,
+            "command": null,
+            "outline": [],
+            "children": [
+              {
+                "id": "STORE.V8.F1",
+                "kind": "file",
+                "label": "tables/question_memory.py",
+                "summary": "The question_memories table.",
+                "details": null,
+                "symbols": [],
+                "path": "src/train_rag/tables/question_memory.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "class",
+                    "name": "QuestionMemoryRecord",
+                    "signature": "(SQLModel, table=True)",
+                    "line": 9,
+                    "doc": "What the person behind one question remembers, and how the note was written.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  }
+                ],
+                "children": []
+              },
+              {
+                "id": "STORE.V8.F2",
+                "kind": "file",
+                "label": "repository/question_memory.py",
+                "summary": "Read and save memory notes.",
+                "details": null,
+                "symbols": [],
+                "path": "src/train_rag/repository/question_memory.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "function",
+                    "name": "upsert_memories",
+                    "signature": "(session: Session, records: Sequence[QuestionMemoryRecord]) -> None",
+                    "line": 12,
+                    "doc": "Store memory notes, replacing the stored note of a question that already has one.\n\nArgs:\n    session: Active database session.\n    records: Notes to store.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  },
+                  {
+                    "kind": "function",
+                    "name": "load_memories",
+                    "signature": "(session: Session, question_ids: Sequence[str]) -> dict[str, MemoryNote]",
+                    "line": 34,
+                    "doc": "Load the memory notes of questions.\n\nArgs:\n    session: Active database session.\n    question_ids: Questions to load; ones without a note are left out.\n\nReturns:\n    Notes keyed by question id.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": []
+                  }
+                ],
+                "children": []
+              },
+              {
+                "id": "STORE.V8.F3",
+                "kind": "file",
+                "label": "models/memory.py",
+                "summary": "The memory note model.",
+                "details": null,
+                "symbols": [],
+                "path": "src/train_rag/models/memory.py",
+                "side": false,
+                "note_kind": null,
+                "doc": null,
+                "command": null,
+                "outline": [
+                  {
+                    "kind": "class",
+                    "name": "MemoryNote",
+                    "signature": "(BaseModel)",
+                    "line": 6,
+                    "doc": "A person's memory of the document they are asking about: big picture, few details.\n\nSome notes hold one detail that is slightly wrong, as human memory often is;\n`wrong_detail` says which, so those questions can be scored apart.",
+                    "decorators": [],
+                    "is_async": false,
+                    "children": [
+                      {
+                        "kind": "method",
+                        "name": "clean",
+                        "signature": "(self) -> bool",
+                        "line": 18,
+                        "doc": "Tell whether every detail in the note is true.\n\nReturns:\n    True when the note has no misremembered detail.",
+                        "decorators": [
+                          "property"
+                        ],
+                        "is_async": false,
+                        "children": []
+                      }
+                    ]
                   }
                 ],
                 "children": []

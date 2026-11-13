@@ -56,7 +56,7 @@
           ]
         }
       ],
-      "details": "The contract every evaluated system shares: `answer(question: str) -> SystemAnswer`, nothing else. `SystemAnswer` carries the answer text, `retrieved_doc_ids` (best first), optional `cited_doc_ids` and an optional agent `trace`.\n\nA new variant subclasses `RagSystem`, sets the class-level `name` and implements `answer`; then it is added to `SYSTEMS` in registry.py to be runnable by name. The system receives only the question text, never the gold answer or expected documents.\n\nTwo reference systems bound the scale: `OracleSystem` (gold answer and expected docs, should score near 100%, so any gap is judge noise) and `NoAnswerSystem` (always the not-found answer, correct only on info-not-found questions).",
+      "details": "The contract every evaluated system shares: `answer(question: str) -> SystemAnswer`, nothing else. `SystemAnswer` carries the answer text, `retrieved_doc_ids` (best first), optional `cited_doc_ids` and an optional agent `trace`.\n\nA new variant subclasses `RagSystem`, sets the class-level `name` and implements `answer`; then it is added to `SYSTEMS` in registry.py to be runnable by name. The system receives only the question text, never the gold answer or expected documents.\n\nTwo reference systems bound the scale: `OracleSystem` (gold answer and expected docs, should score near 100%, so any gap is judge noise) and `NoAnswerSystem` (always the not-found answer, correct only on info-not-found questions).\n\n`ClarifyingSystem` is a subclass of `RagSystem` with `answer_with(question, person)`; `evaluate_question` in pipeline.py passes it a simulated `Person` from an optional `person_factory`. It is implemented in the separate CLAR module.",
       "symbols": [
         "RagSystem",
         "RagSystem.answer",
@@ -158,6 +158,17 @@
           ]
         },
         {
+          "id": "EVAL.V2.F3",
+          "kind": "file",
+          "label": "evaluation/agent_cache.py",
+          "summary": "ConversationCache: Gemini context cache of the conversation's start, with fallback to uncached.",
+          "path": "src/train_rag/evaluation/agent_cache.py",
+          "details": "`ConversationCache` holds at most one Gemini cache of the conversation prefix (instructions, tools, turns so far) and how many turns it covers, so later turns are billed at the cached rate. A new cache replaces the old one. A turn that must switch tools off cannot use it, and if a cache cannot be made (too few tokens, API error) the agent runs uncached. TTL is 300 seconds.",
+          "symbols": [
+            "ConversationCache"
+          ]
+        },
+        {
           "id": "EVAL.V2.N1",
           "kind": "note",
           "note_kind": "why",
@@ -211,6 +222,25 @@
         "SummarySearchSystem.answer",
         "context",
         "MAX_CONTEXT_CHARS"
+      ]
+    },
+    {
+      "id": "EVAL.V5",
+      "kind": "variant",
+      "label": "agent-keywords",
+      "summary": "Snippet agent with separate budgets: few meaning searches, many keyword searches.",
+      "details": "`KeywordAgentSystem` extends `SnippetAgentSystem`. After the automatic first search it allows `MAX_SEMANTIC` (2) general searches and `MAX_KEYWORD` (10) keyword searches, so the agent can try many wordings, and its prompt tells it to paraphrase when a keyword search finds nothing. Results are matching lines with document ids; `read_document` reads a full document (`MAX_READS`). Over-budget calls get the `SEMANTIC_LIMIT` or `KEYWORD_LIMIT` message. It caches the conversation start via `ConversationCache`.",
+      "children": [
+        {
+          "id": "EVAL.V5.F1",
+          "kind": "file",
+          "label": "evaluation/agent_keywords.py",
+          "summary": "KeywordAgentSystem with split semantic and keyword search budgets.",
+          "path": "src/train_rag/evaluation/agent_keywords.py",
+          "symbols": [
+            "KeywordAgentSystem"
+          ]
+        }
       ]
     },
     {
@@ -292,7 +322,7 @@
           "label": "evaluation/pipeline.py",
           "summary": "run_evaluation: threaded per-question answer, retrieval metrics and grade, stored in batches.",
           "path": "src/train_rag/evaluation/pipeline.py",
-          "details": "`evaluate_question` answers, computes `document_recall` and `invalid_extra_docs`, then grades; a system exception is stored as `system: ...` and a judge exception as `judge: ...` on the result. `evaluate_questions` maps this over a `ThreadPoolExecutor` (8 workers by default), keeping question order. `run_evaluation` creates the run, stores results in batches of `BATCH_SIZE` = 50, and finishes it with the `RunSummary`.",
+          "details": "`evaluate_question` answers, computes `document_recall` and `invalid_extra_docs`, then grades; a system exception is stored as `system: ...` and a judge exception as `judge: ...` on the result. `evaluate_questions` maps this over a `ThreadPoolExecutor` (8 workers by default), keeping question order. `run_evaluation` creates the run, stores results in batches of `BATCH_SIZE` = 50, and finishes it with the `RunSummary`. `evaluate_question` takes an optional `person_factory`: a `ClarifyingSystem` gets a fresh `Person` per question, every other system sees only the question text.",
           "symbols": [
             "run_evaluation",
             "evaluate_questions",

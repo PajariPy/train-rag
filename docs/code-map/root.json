@@ -3,5 +3,16 @@
   "source_root": "src/train_rag",
   "entry_label": "train-rag CLI",
   "entry_file": "src/train_rag/main.py",
-  "module_order": ["DL", "PARSE", "INGEST", "RET", "EVAL", "PROG", "STORE", "SHARED"]
+  "module_order": [
+    "DL",
+    "PARSE",
+    "INGEST",
+    "RET",
+    "EVAL",
+    "CLAR",
+    "TRAIN",
+    "PROG",
+    "STORE",
+    "SHARED"
+  ]
 }

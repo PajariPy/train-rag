@@ -442,6 +442,151 @@ comes first) and reranks both settings again.
 - **No model, no labels and nothing to keep up to date** as documents are added: a one-line
   cut before the reranker. This is the cheap speed-up to use when latency is needed.
 
+## What does the embedding model add? (10 November)
+
+The full evaluation (hybrid-rerank over all 500 questions: run 7 for basic, 17 for semantic,
+19–26 for the other types) scores **377/500 (75.4%)**. It saved only the final 5 documents
+and no traces, so we don't know which search found them. Search is deterministic, so
+`exploration/retriever_attribution/attribution.py` (free, about 45 s) replays both rankings
+for every question exactly as the pipeline runs them (gte top 50, BM25 top 50, RRF to 50)
+and checks where each right document was. 12 of 470 questions differ slightly from the
+original runs; the rest match.
+
+| 742 right documents (470 answerable questions) | In the top-50 lists | Reached the final 5 | Final 5, question judged correct |
+|---|---:|---:|---:|
+| Both gte and BM25 | 402 (54%) | 363 (75%) | 322 (76%) |
+| **BM25 only** | **178 (24%)** | **104 (22%)** | **89 (21%)** |
+| **gte only** | **24 (3%)** | **14 (3%)** | **11 (3%)** |
+| Neither (never reaches the reranker) | 138 (19%) | – | – |
+
+| Per type (both / gte only / BM25 only / neither) | Both | gte only | BM25 only | Neither |
+|---|---:|---:|---:|---:|
+| basic | 119 | 9 | 37 | 10 |
+| **semantic** | 33 | **5** | **45** | **42** |
+| project_related | 92 | 4 | 53 | 20 |
+| completeness | 40 | 5 | 26 | 59 |
+| conflicting_info | 29 | 0 | 8 | 3 |
+| constrained | 36 | 0 | 3 | 4 |
+| intra_document_reasoning | 34 | 0 | 6 | 0 |
+| miscellaneous | 19 | 1 | 0 | 0 |
+
+- **The embedding model adds only about 3% on top of BM25.** Almost everything gte finds,
+  BM25 finds too. Without gte, the pipeline would lose about 3% of its right documents
+  (11 in correct answers), against 21% without BM25.
+- **On semantic questions, the type embeddings exist for, gte doesn't work properly.** Its
+  top 50 holds only 38 of the 125 right documents; BM25 alone finds 45 that gte misses, and
+  42 are found by neither.
+- **The geometry explains it** (notebooks 008 and 009). gte's vectors sit in a narrow cone:
+  two random documents already have a cosine of 0.62 on average. For a missed semantic
+  question, the right document is 0.04–0.09 below rank 1, while the whole top 50 spans only
+  0.02–0.06. The near-duplicates are packed tighter than the gap the right document needs to
+  close.
+
+### Would a bigger general model do it? Qwen3-Embedding-0.6B (10 November)
+
+The usual advice before fine-tuning is to try a stronger general model first. A full
+re-index with Qwen3-Embedding-0.6B (4× gte's size, 32k context) would take about 23 hours
+on the laptop (measured: 30k characters/s against gte's 97k; the corpus is 2.46B
+characters), so `exploration/embedder_comparison/compare.py` (free, 43 min) estimates it on
+a sample instead:
+
+- 100 answerable questions, stratified by type (163 right documents);
+- a pool of their replayed gte and BM25 top 50s plus the right documents (9,042 documents),
+  and 5,000 random corpus documents as distractors;
+- each right document's corpus rank is estimated as (pool documents above it) + 1 +
+  (distractors above it) × (outside documents / 5,000).
+
+The estimate is checked against gte's real rankings: it agrees for all 163 right documents.
+
+| 163 right documents | Top 10 | Top 50 | Median rank | With BM25 (either top 50) |
+|---|---:|---:|---:|---:|
+| BM25 alone | – | – | – | 122 |
+| gte | 41% | 49% | 51 | 128 |
+| Qwen3-Embedding-0.6B | 48% | 55% | 15 | **128** |
+
+- **Qwen is better alone but adds nothing in the hybrid.** It gains 19 right documents gte
+  misses, but 15 of those BM25 already finds, and it loses 9 that gte had. With BM25, both
+  reach the same 128.
+- **Semantic and completeness don't move** (semantic 9 vs 9 of 27, completeness 3 vs 2 of 27).
+  A bigger general model is better at the same keyword-like matches BM25 already covers, not
+  at near-duplicates.
+
+## Fine-tuning the embedder: first runs (12 November)
+
+Our own questions (brainstorm 005): 2,067 for training and 422 for dev, each with its source
+document and 5 hard negatives from just below the reranker's biggest score drop. Full
+fine-tuning of gte-modernbert-base (all 149M parameters) with sentence-transformers:
+MultipleNegativesRankingLoss in its cached form, 32 questions per step (each pushed away from
+its 5 negatives and the other documents in the batch), warmup over 10% of steps, then a linear
+decay to 0. Script: `exploration/embedder_finetune/train.py`; runs on a rented RTX 4090
+(Vast.ai, $0.37/h, `vast/` scripts keep one machine up for several runs).
+
+The dev check ranks each dev question's right document among that question's own search
+candidates (the fused gte + BM25 top 50 plus the right document), at the index's full length
+(8,192 tokens). It needs no re-embedding of the corpus. The benchmark isn't touched.
+
+| Run | Peak LR | Epochs | Doc length | Top 1 | Top 5 | Top 10 | MRR | Semantic top 10 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| before (gte-modernbert-base) | | | | 26% | 41% | 49% | 0.35 | 23% |
+| laptop | 2e-5 | 1 | 1,024 | 23% | 43% | 55% | 0.34 | 47% |
+| full-lr2e-5 | 2e-5 | 1 | full | 39% | 59% | 73% | 0.50 | 68% |
+| full-lr1e-5 | 1e-5 | 1 | full | 46% | 69% | 78% | 0.56 | 69% |
+| lr1e-5-e2 | 1e-5 | 2 | full | 41% | 65% | 78% | 0.53 | 71% |
+| **lr5e-6-e2** | **5e-6** | **2** | full | 44% | 69% | **82%** | **0.56** | **77%** |
+| lr5e-6-e3 | 5e-6 | 3 | full | 45% | 71% | 82% | 0.57 | 72% |
+| lr5e-6-e2-b64 (64 per step) | 5e-6 | 2 | full | 48% | 66% | 78% | 0.58 | 67% |
+
+- **Cutting documents to 1,024 tokens was the laptop run's problem.** Training documents
+  average 1,609 tokens (90th percentile 2,547), so the cut removed most of the text; the
+  model learned on fragments and was then searched on whole documents. At full length every
+  number rises.
+- **Gentle training wins.** A lower peak learning rate is better at the same number of
+  epochs, and with a high rate the in-training checks dip early and only partly recover.
+  The model already embeds well; a hard push moves it away from what it knows.
+- **More epochs flatten out.** 3 epochs gain 1 point of MRR over 2 and lose 5 points on
+  semantic questions (a handful of the 118); the gaps between the last runs are within a few
+  questions.
+- **64 questions per step** (more in-batch negatives) sharpens the top (top 1 48%, MRR
+  0.58) but finds fewer right documents in the top 10 (78%) and fewer semantic ones (67%):
+  the wrong trade for an embedder that feeds a reranker. It finished after the choice.
+- Loading 4 or 8 full-length documents at once runs out of memory on 24 GB; 2 fits (14 GB).
+
+### Qwen3-Embedding-0.6B: started, not finished (12 November)
+
+Untouched, Qwen3-0.6B is stronger than untouched gte on the dev candidate check (top 10 61%
+vs 49%, semantic 41% vs 23%, MRR 0.40 vs 0.35), with a task instruction in front of each
+question. A fine-tune with the same settings as `lr5e-6-e2` (full fine-tuning, 2 documents
+at once with gradient checkpointing, 7 GB of 24) was at MRR 0.54 on the 100-question check
+after 40% of training, about level with gte at the same point. It crashed at 60% when the
+rented machine's disk filled up: every run kept two checkpoints, and a Qwen checkpoint with
+its optimizer state is about 7 GB. With $0.60 of credit left it wasn't resumed. Next time:
+a larger disk and one checkpoint per run.
+
+### Real search over the whole corpus, dev questions (12 November)
+
+The corpus was re-embedded with `lr5e-6-e2` on a rented 4 × RTX 4090 (512,052 chunks, about
+21 minutes, about $2.30 with setup and copying) into the `_768_ft` tables. Then all 422 dev
+questions ran through production search (gte top 50 + BM25 top 50, fused to 50, reranked to
+10) with each embedder (`exploration/embedder_finetune/dev_search.py`, free):
+
+| Right document reaches | Base gte | Fine-tuned gte |
+|---|---:|---:|
+| the embedder's top 50 | 61% | **70%** |
+| — semantic (118) | 35% | **53%** |
+| the fused top 50 | 80% | **84%** |
+| the reranked top 10 | 80% | **84%** |
+| — semantic | 49% | **61%** |
+| first place | 70% | **74%** |
+
+- The gain is real but smaller than the candidate check suggested (semantic 23% → 77%):
+  there the right document only competed with the ~51 documents base search had already
+  found; here it competes with near-duplicates from the whole corpus.
+- BM25 already found nearly all right documents for basic and intra-document questions,
+  so the embedder's gain there disappears in the fusion; for semantic questions most of
+  it carries through (+14 of 118 in the final top 10).
+- Once the right document is in the fused 50, the reranker puts it in the top 10 almost
+  every time (353 of 353). Getting into the list remains the whole problem.
+
 ## Why our own judge prompts, not Ragas
 
 Our two checks measure what Ragas calls *faithfulness* (are the statements backed by the
@@ -512,8 +657,66 @@ done (see the open points).
   nothing that goes stale. Facts are no longer needed for speed. Not switched on yet; use it
   when the latency is needed (agents, a deeper list).
 
+**10–11 November**
+
+- **Fine-tune the embedding model, trained with negative sampling.** The embedder adds only
+  about 3% on top of BM25 and doesn't work properly on semantic questions. Swapping in a
+  bigger general model (Qwen3-Embedding-0.6B) doesn't help in the hybrid, and smaller
+  chunks, late chunking and jina were already dead ends. What's left is teaching the
+  embedder our domain: contrastive training on (question, right document) pairs with hard
+  negatives mined from the near-duplicates in its own top 50.
+- **The benchmark's 500 questions stay the evaluation set** and aren't used for training.
+  The target is the right documents BM25 misses (178 + 138 = 316 of 742), not matching BM25.
+- **Negatives come from the reranker's biggest score drop, not from an LLM judge**
+  (brainstorm 004). Per question, the biggest step between neighbouring reranker scores in
+  the top 30 splits a small "grey zone" above it (dropped: it may hold other answers) from
+  hard negatives below it. On a 100-question sample the right document sits above the drop
+  for 91 of 100, with a median of 1 document above it. A judge for every hard negative would
+  cost about $24 per 2,000 questions; the drop rule costs nothing. Questions whose own
+  document lands below the drop are skipped.
+- **We generate our own training questions, the benchmark's way.** The benchmark's
+  generation code and prompts are public (MIT, `onyx-dot-app/EnterpriseRAG-Bench`,
+  `src/prompts/`). Reusing them gives training questions in the same style without
+  touching the benchmark's own questions (design: brainstorm 005).
+- **First set: the one-document types only** (basic, semantic, intra-document reasoning,
+  miscellaneous), about 2,000 questions in the benchmark's proportions (175 : 125 : 40 : 20).
+  They cost one LLM call each (about $1 with DeepSeek, which fits the $2.38 left). The
+  corpus-exploration types need an agent reading 10–20 documents per question (about $3
+  more with DeepSeek, about $16 with Gemini); high level and info not found have no right
+  document, so they're useless for an embedder.
+- **No training question touches an evaluation document.** The right documents of all 500
+  benchmark questions, and their closest near-duplicates, are excluded as sources, and the
+  right documents also as negatives. Otherwise the test measures memory, not search.
+- **Train, dev and test.** Our synthetic questions split into train (about 2,000) and dev
+  (about 400, from different documents and not their near-duplicates). Every hypothesis and
+  setting is tuned on dev; the benchmark's 500 questions are checked once, when the approach
+  is final, so we don't fit the method to the test.
+
+**12 November**
+
+- **The fine-tuned embedder is `lr5e-6-e2`**: peak learning rate 5e-6, 2 epochs, full-length
+  documents. It is tied for the best top 10 (82%) and MRR (0.56) on dev, and best on
+  semantic questions (77%, from 23%), the failure we set out to fix. Top 10 matters most:
+  the embedder's job is to get the right document into the reranker's list, and the
+  reranker orders the top.
+- **Tuning stops here for now.** A 5-epoch run and a learning-rate schedule that drops on a
+  dev plateau were considered and left: the last runs differ by a few questions, and dev
+  questions are written like the training ones, so more tuning risks fitting our own style.
+  The benchmark decides whether the gain holds.
+- **Its vectors go in separate tables** (`<source>_embeddings_768_ft`, model
+  `gte-modernbert-ft`), so the base model's rows and index stay as they are and both can be
+  searched side by side. Search picks the tables from the embedder; the evaluation has
+  `gte-ft-chunk`, `hybrid-ft` and `hybrid-ft-rerank`.
+- **The corpus is re-embedded on a rented 4 × RTX 4090** (512,052 chunks, the exact texts
+  the base model embedded), then the benchmark is run once with the fine-tuned embedder.
+
 ## Open points
 
+- **Does the fine-tuned embedder hold on the benchmark?** Dev questions are ours; the
+  benchmark's 500 are the real test (after the corpus re-embedding).
+- **Left for later:** a 5-epoch curve and a plateau learning-rate schedule.
+- **Qwen3-Embedding-0.6B fine-tune** (stopped at 60%, out of credit); about $1 to finish and
+  check on dev, about $5 more to re-embed the corpus.
 - **Routing for the 26 failures** whose right document isn't in the fused 300 (see the
   end-to-end test): keywords or buckets, in the document-growth map.
 - **Does a deeper list hurt the questions that already pass?** The end-to-end test ran on the
