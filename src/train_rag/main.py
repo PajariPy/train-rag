@@ -13,6 +13,7 @@ from train_rag.evaluation.registry import JUDGES, RETRIEVERS, SYSTEMS
 from train_rag.import_db import import_corpus
 from train_rag.index_bm25 import index_bm25
 from train_rag.index_summaries import index_summaries
+from train_rag.mined_fields.cli import add_field_commands, run_field_command
 from train_rag.models import QuestionType
 from train_rag.pipelines.data_ingestion import run_data_ingestion
 from train_rag.progress.page import serve_progress_page
@@ -49,6 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     page = commands.add_parser("progress-page", help="serve a web page with the run's progress")
     page.add_argument("--port", type=int, default=8765)
     add_workflow_commands(commands)
+    add_field_commands(commands)
     keywords = commands.add_parser("index-bm25", help="build a BM25 keyword index on disk")
     keywords.add_argument(
         "--sample", type=int, help="only the cited documents plus N random distractors"
@@ -113,6 +115,9 @@ def main() -> None:
 
     if args.command == "workflow":
         run_workflow_command(args)
+
+    if args.command in ("import-fields", "embed-fields"):
+        run_field_command(args)
 
     if args.command == "index-bm25":
         index_bm25(args.sample)

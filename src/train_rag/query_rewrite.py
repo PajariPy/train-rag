@@ -50,9 +50,7 @@ class QueryRewriter:
                     system_instruction=self.instructions,
                     response_mime_type="application/json",
                     response_schema=Rewrites,
-                    thinking_config=types.ThinkingConfig(
-                        thinking_level=types.ThinkingLevel.LOW
-                    ),
+                    thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
                 ),
             )
         except genai_errors.APIError:
