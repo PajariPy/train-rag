@@ -10,6 +10,7 @@ from train_rag.evaluation.agent import AgentSystem
 from train_rag.evaluation.agent_clarify import ClarifyingSnippetAgent
 from train_rag.evaluation.agent_keywords import KeywordAgentSystem
 from train_rag.evaluation.agent_snippets import SnippetAgentSystem
+from train_rag.evaluation.field_agent.system import ClarifyingFieldAgent, FieldAgentSystem
 from train_rag.evaluation.hybrid import PipelineRetriever
 from train_rag.evaluation.judge import AnswerJudge, GeminiJudge
 from train_rag.evaluation.pipeline_answer import (
@@ -60,7 +61,12 @@ SYSTEMS: dict[str, SystemFactory] = {
     ClarifyingSnippetAgent.name: lambda _questions: ClarifyingSnippetAgent(
         PipelineRetriever(RetrievalPipeline.load()), genai.Client(), USAGE
     ),
+    # The accepted pipeline: general and field search, the check, the cited answer.
+    FieldAgentSystem.name: lambda _questions: FieldAgentSystem.load(genai.Client(), USAGE),
+    ClarifyingFieldAgent.name: lambda _questions: ClarifyingFieldAgent.load(genai.Client(), USAGE),
 }
+# Systems that ask the simulated person: every question needs a memory note.
+CLARIFYING_SYSTEMS = {ClarifyingSnippetAgent.name, ClarifyingFieldAgent.name}
 JUDGES: dict[str, JudgeFactory] = {
     GeminiJudge.name: lambda: GeminiJudge(genai.Client(), usage=USAGE),
 }
