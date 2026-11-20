@@ -350,9 +350,12 @@ field_agent_instructions: |
 
   The general search over every document of every source. It matches your words (keyword
   search) and their meaning (an embedding search), then a reranker orders the results by
-  how well they answer your query. Write the query like the question, or a sentence the
-  right document would contain; exact names, ids, error codes and rare terms help it.
-  It is slow, so use it for: questions about emails, tickets, docs, pull requests,
+  how well they answer your query. It is tuned for whole questions: in your first
+  search_documents call, pass the search question exactly as asked, word for word (don't
+  shorten it to key words; the search adds keyword rewrites itself). In a later call,
+  write another whole question or a sentence the right document would contain; exact
+  names, ids, error codes and rare terms help it. It has no operators: don't use quotes,
+  OR or AND, every word counts on its own. It is slow, so use it for: questions about emails, tickets, docs, pull requests,
   meetings or CRM records (most of those have no mined fields, so search_fields can't find
   them); exact words you know (a client, a component, an id); and the first search when
   you don't know which area or kind of document holds the answer. Results show each

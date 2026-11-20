@@ -69,5 +69,20 @@ Built on branch `feature-pipeline-agent` as two systems, `field-agent` (no askin
   the top 5 (different measure, same order of size).
 - **Checks:** 285 local tests pass (Gemini mocked), along with ruff and mypy.
 
-Still to do: the 20-question smoke run (paid, waiting for the go), then
-[[Prepare the evaluation for the final run]].
+- **Smoke run** (`field-agent-clarify`, 20 semantic benchmark questions with memory notes,
+  runs 32–34, $1.51 Gemini). The tool calls, the check turn, asking and the cited answers
+  all worked, with 0 errors.
+  - First pass: 5/20 correct, right document in the final 5 for 5/20. The agent shortened
+    the question for its first general search, and the search lost the right document
+    (that query found it in the top 5 once, the plain question 6 times).
+  - Fix: the prompt now says to pass the question as asked in the first `search_documents`
+    call, and that the search has no quotes, OR or AND. The 15 failed questions were
+    rerun: 5 more correct.
+  - Combined: 10/20 correct, right document in the final 5 for 10/20. The plain union
+    search alone gets 6/20 into the top 5 on these 20; they are mostly hard ones.
+  - Tools: `search_documents` was always called first, then usually a second general
+    search and two field searches. The agent asked on 7 of 35 attempts (8 asks).
+  - Check verdicts: 19 same answer, 16 one case fits, 1 several cases fit.
+  - Time: about 4 minutes per 15–17 questions with 6 in parallel.
+
+Next: [[Prepare the evaluation for the final run]].
