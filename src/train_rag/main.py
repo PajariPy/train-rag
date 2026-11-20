@@ -15,9 +15,9 @@ from train_rag.index_bm25 import index_bm25
 from train_rag.index_summaries import index_summaries
 from train_rag.models import QuestionType
 from train_rag.pipelines.data_ingestion import run_data_ingestion
-from train_rag.pipelines.retrieval import run_retrieval
 from train_rag.progress.page import serve_progress_page
 from train_rag.progress.workflow_cli import add_workflow_commands, run_workflow_command
+from train_rag.retrieve import run_retrieval
 
 
 def build_parser() -> argparse.ArgumentParser:

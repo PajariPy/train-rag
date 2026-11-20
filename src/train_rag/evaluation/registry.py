@@ -22,6 +22,7 @@ from train_rag.evaluation.usage import UsageMeter
 from train_rag.index_bm25 import bm25_index_dir
 from train_rag.models import Question
 from train_rag.pipelines.retrieval import RetrievalPipeline
+from train_rag.reranker import SHORT_TOKENS
 from train_rag.retrieval import Bm25Retriever, EmbeddingRetriever, Retriever
 
 SystemFactory = Callable[[Sequence[Question]], RagSystem]
@@ -88,5 +89,15 @@ RETRIEVERS: dict[str, RetrieverFactory] = {
     ),
     "hybrid-ft-rerank": lambda sample: PipelineRetriever(
         RetrievalPipeline.load(bm25_index_dir(sample), rerank=True, embedder=FineTunedGteEmbedder())
+    ),
+    # The accepted first search, without the paid rewrites: the union of both searches,
+    # reranked on the first 1,024 tokens.
+    "hybrid-ft-union": lambda sample: PipelineRetriever(
+        RetrievalPipeline.load(
+            bm25_index_dir(sample),
+            embedder=FineTunedGteEmbedder(),
+            union=True,
+            rerank_tokens=SHORT_TOKENS,
+        )
     ),
 }

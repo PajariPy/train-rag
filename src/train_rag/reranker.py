@@ -8,6 +8,9 @@ import torch
 from sentence_transformers import CrossEncoder
 
 GTE_RERANKER = "Alibaba-NLP/gte-reranker-modernbert-base"
+# The model's whole context, and the cut the accepted pipeline reranks on.
+FULL_TOKENS = 8192
+SHORT_TOKENS = 1024
 
 
 class Reranker(ABC):
@@ -33,21 +36,23 @@ class GteModernBertReranker(Reranker):
 
     It reads the query and a document together (up to 8,192 tokens), so it can judge
     relevance far more precisely than comparing two separate vectors, but it has to run
-    once per document. Runs in half precision.
+    once per document. Runs in half precision. Cut to the first 1,024 tokens, it ranks as
+    well as on the full text at about 2.3x the speed (article 006).
     """
 
     name: ClassVar[str] = "gte-reranker-modernbert-base"
-    max_tokens: ClassVar[int] = 8192
 
-    def __init__(self, batch_size: int = 4) -> None:
+    def __init__(self, batch_size: int = 4, max_tokens: int = FULL_TOKENS) -> None:
         """Load the model in half precision, on the GPU when there is one.
 
         Args:
             batch_size: Pairs scored at once.
+            max_tokens: Tokens of each query and document pair read; the rest is cut.
         """
+        self.max_tokens = max_tokens
         self.model = CrossEncoder(
             GTE_RERANKER,
-            max_length=self.max_tokens,
+            max_length=max_tokens,
             model_kwargs={"torch_dtype": torch.float16},
         )
         self.batch_size = batch_size

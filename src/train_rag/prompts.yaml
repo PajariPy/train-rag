@@ -325,3 +325,12 @@ ask_tool_description: |
 
 ask_question_description: |
   One short, specific question for the person.
+
+# Query rewrites for the first search (query_rewrite.py): appended to the question for
+# BM25 only (decision 16 Nov, exploration/query_expansion).
+rewrite_instructions: |
+  Rewrite the question into {count} search queries for a search engine over a company's
+  internal documents (Slack, email, Jira, Google Drive, meeting transcripts, CRM). The
+  first is a keyword query: the key terms plus the synonyms the document may use instead.
+  The others describe, in different words from the question, what the document that
+  answers it would say. Don't answer the question.
