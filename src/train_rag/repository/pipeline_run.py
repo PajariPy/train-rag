@@ -79,9 +79,6 @@ def update_run(
 def latest_run_state(session: Session) -> RunState | None:
     """Describe the most recent run, with its elapsed and estimated remaining time.
 
-    The time left assumes the run keeps its average speed, in characters per second when
-    the run counts characters and in items per second otherwise.
-
     Args:
         session: Active database session.
 
@@ -91,7 +88,44 @@ def latest_run_state(session: Session) -> RunState | None:
     run = session.exec(
         select(PipelineRunRecord).order_by(col(PipelineRunRecord.id).desc()).limit(1)
     ).first()
-    if run is None or run.id is None:
+
+    return None if run is None else run_state(run)
+
+
+def set_run_progress(
+    session: Session, run: PipelineRunRecord, done_items: int, total_items: int, note: str | None
+) -> None:
+    """Set a run's progress to absolute numbers, for steps reported from a shell script.
+
+    Args:
+        session: Active database session.
+        run: The run.
+        done_items: Items finished so far.
+        total_items: Items in all.
+        note: New extra line for the page, or None to keep the current one.
+    """
+    run.done_items, run.total_items = done_items, total_items
+    if note is not None:
+        run.note = note
+    run.updated_at = datetime.now(UTC)
+    session.add(run)
+    session.commit()
+
+
+def run_state(run: PipelineRunRecord) -> RunState | None:
+    """Describe a run, with its elapsed and estimated remaining time.
+
+    The time left assumes the run keeps its average speed, in characters per second when
+    the run counts characters and in items per second otherwise. A running run that
+    hasn't updated for STALE_AFTER counts as stopped.
+
+    Args:
+        run: The stored run.
+
+    Returns:
+        The run's state, or None for a run without an id.
+    """
+    if run.id is None:
         return None
 
     now = datetime.now(UTC)

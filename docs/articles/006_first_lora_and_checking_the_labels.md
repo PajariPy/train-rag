@@ -587,6 +587,184 @@ questions ran through production search (gte top 50 + BM25 top 50, fused to 50, 
 - Once the right document is in the fused 50, the reranker puts it in the top 10 almost
   every time (353 of 353). Getting into the list remains the whole problem.
 
+### The benchmark run (13 November)
+
+The benchmark's 500 questions were run once with the fine-tuned embedder (run 31, system
+`hybrid-ft-rerank`: the same pipeline, answer and Gemini judge as the base runs 7, 17 and
+19–26; $4.53). Correct answers:
+
+| Question type | Questions | Base | Fine-tuned |
+|---|---:|---:|---:|
+| basic | 175 | 86.3% | **90.9%** |
+| semantic | 125 | 52.8% | 54.4% |
+| intra-document reasoning | 40 | 92.5% | 92.5% |
+| project related | 40 | 65.0% | 65.0% |
+| constrained | 30 | 80.0% | 80.0% |
+| conflicting info | 20 | 90.0% | 95.0% |
+| completeness | 20 | 55.0% | 55.0% |
+| miscellaneous | 20 | 100% | 95.0% |
+| info not found | 20 | 100% | 100% |
+| high level | 10 | 40.0% | 50.0% |
+| **overall** | 500 | **75.4%** | **77.6%** |
+
+Per question, 21 answers went from wrong to right and 10 from right to wrong. Semantic
+questions, the failure the fine-tuning was for, gained 5 and lost 3: two net questions,
+where dev had promised semantic 49% → 61% in the top 10.
+
+### Where the gain went: the semantic check (13 November)
+
+To see where it got lost, both pipelines were replayed on the 125 semantic questions
+(`exploration/embedder_finetune/benchmark_semantic_check.py`, local and free), recording
+where the right document lands at each stage. The search works in three steps: gte and BM25
+each return their top 50 documents; reciprocal rank fusion merges the two lists and keeps
+the top 50; the reranker orders those 50, and the top 5 go to Gemini.
+
+| Right document (125) | Base gte | Fine-tuned gte |
+|---|---:|---:|
+| in gte's own top 50 | 38 | **59** |
+| in the fused 50 (the reranker's list) | 75 | 80 |
+| in the reranked top 5 | 69 | 72 |
+| not in the reranker's list | 50 | 45 |
+
+- **The embedder did learn:** on its own it finds 21 more right documents.
+- **But BM25 already had most of them,** so the fused list gains only 5.
+- **The reranker isn't the limit.** It puts the right document in the top 5 for 69 of 75
+  (base) and 72 of 80 (fine-tuned) when it is in its list: about 90%. The numbers match
+  the benchmark's document recall exactly (55.2% → 57.6%).
+- **Fusion throws candidates away.** The two lists hardly overlap, so fusion keeps 50 of
+  about 100 documents. It cut 8 right documents the fine-tuned gte had found, at its ranks
+  35–48.
+- Of the 54 semantic questions wrong in both runs, 43 never had the right document in the
+  reranker's list.
+
+### Rerank the union of both lists (15 November)
+
+Instead of fusing to 50, the reranker reads every document of both top-50 lists, with
+duplicates removed: about 97 documents per question (median), so only about 3 are shared.
+No new search is added, and nothing is cut from the documents
+(`exploration/embedder_finetune/union_rerank_check.py`, local and free). Right document in
+the final 5, 125 semantic questions:
+
+| | Fused 50 (today) | Union |
+|---|---:|---:|
+| base gte | 69 | 73 |
+| fine-tuned gte | 72 | **80** |
+
+- **Fine-tuned gte with the union: 80 of 125, 64.0%,** against 69 (55.2%) for today's
+  production search. The fine-tuning pays off once the reranker sees all its candidates.
+- Against its own fused 50, the union gained 10 questions and lost 2: a longer list rarely
+  pushes a right document out.
+- Right documents not among the candidates at all: 45 → 31. These need a different search
+  (HyDE, query rewriting), not a deeper rerank.
+- **The cost is time:** reranking takes a median 6.3 s per question instead of 3.3 s.
+- On the benchmark, semantic correctness ran about 3 points below this final-5 rate, so 64%
+  would mean roughly 60–61% correct: about the snippet agent's 60.8%, without its extra
+  Gemini calls.
+
+### HyDE and query rewriting, on dev (15 November)
+
+The 31 right documents in neither list need a different search. Two known ways, tested on
+our dev set first (fine-tuned gte, the benchmark stays untouched):
+
+- **HyDE:** Gemini writes a 120–200-word passage that would answer the question, in the
+  style of the documents, and we search with it.
+- **Query rewriting:** Gemini rewrites the question into 4 search queries: one keyword query
+  with the synonyms a document might use, and three descriptions of what the answering
+  document would say.
+
+Gemini 3.8 Flash wrote both for the 118 semantic dev questions for $0.21. Every candidate any
+search returned was scored once by the reranker against the original question, so every
+combination below is ranked from the same scores (`exploration/query_expansion/`, local
+apart from Gemini).
+
+First, on all 422 dev questions, the union against today's fused 50: top 5 82.2% → 83.9%,
+top 1 73.9% → 74.2%, no question type loses. Then the semantic dev questions, right document
+in the reranked top 5:
+
+| Candidates | Documents reranked | Top 5 | Rerank time |
+|---|---:|---:|---:|
+| fused 50 (production) | 50 | 56.8% | 3.0 s |
+| union of the question's two searches | 97 | 61.0% | 5.9 s |
+| union + HyDE searches (gte and BM25) | 180 | 65.3% | 11.0 s |
+| union + the 4 rewrites' searches | 392 | **69.5%** | 23.8 s |
+| union + HyDE + rewrites | 460 | 68.6% | 28.0 s |
+| all 12 lists fused with RRF, top 100 | 100 | 67.8% | 6.1 s |
+
+- **Rewrites as extra searches work best:** the right document is among the candidates for
+  84.7% of the questions instead of 67.8%. HyDE adds nothing on top of them.
+- **But the reranker would read about 390 documents per question,** about 24 s. More
+  candidates also bring more near-duplicates: rank 1 stays at 46–48% whatever we add.
+- **Replacing the question with the expanded text hurts.** gte searching with the HyDE
+  passage instead of the question finds the right document in the top 5 for 50.0%, a
+  paraphrase 47.5%: the fine-tuned gte learned to match questions. Only BM25 gains from a
+  swap, with the keyword rewrite instead of the question (61.0% → 63.6%).
+
+So the expansions were merged into the query *before* the search instead: still one gte
+search and one BM25 search, so the reranker still reads about 96 documents. For gte, the
+question's vector is averaged with the expansions' vectors (and normalized again), or the
+rewrites are appended to the question as one text; for BM25, the keyword rewrite or the
+question with the rewrites appended:
+
+| gte searches with | BM25 searches with | Top 5 |
+|---|---|---:|
+| the question (today's union) | the question | 61.0% |
+| the question | the keyword rewrite | 63.6% |
+| mean of the question and 4 rewrite vectors | the question + rewrites as text | 65.3% |
+| the question (half) + the rewrites (half) | the keyword rewrite | 66.1% |
+| **mean of the question and HyDE vectors** | **the keyword rewrite** | **66.9%** |
+| mean of the question, HyDE and 4 rewrite vectors | the keyword rewrite | 62.7% |
+
+- **Best: the question's vector averaged with the HyDE passage's, and BM25 with the keyword
+  rewrite:** 61.0% → 66.9% (+7 of 118) at the same 96 documents and about 6 s of reranking.
+  It keeps most of the 12-search gain (69.5%) with 2 searches.
+- Averaging in too much (all five vectors) blurs the question again.
+- With 118 questions, one question is 0.85 points, so differences of 1–2 points are noise.
+- Dev questions were generated like the training questions, and the fine-tuning's dev gain
+  shrank a lot on the benchmark; this one may too.
+
+### The merged query on the benchmark (15–16 November)
+
+The same setups on the benchmark's 125 semantic questions, with the same Gemini prompts
+($0.22) and the fine-tuned gte. Each question still gets one gte search and one BM25 search,
+about 95 documents reranked. Right document in the top 5:
+
+| gte searches with | BM25 searches with | Test | Dev |
+|---|---|---:|---:|
+| the question (today's union) | the question | 64.0% | 61.0% |
+| **the question** | **the question + 4 rewrites appended** | **67.2%** | 63.6% |
+| mean of the question and HyDE vectors | the question | 65.6% | 63.6% |
+| mean of the question and HyDE vectors | the question + rewrites appended | 65.6% | 66.1% |
+| mean of the question and 4 rewrite vectors | the question + rewrites appended | 65.6% | 65.3% |
+| mean of the question and HyDE vectors (dev's best) | the keyword rewrite | ✗ 60.8% | 66.9% |
+| the question | the keyword rewrite | ✗ 60.8% | 63.6% |
+
+- **Dev's best doesn't hold.** It replaces the question with the keyword rewrite for BM25,
+  and on the benchmark it loses 4 questions.
+- **The vector means don't hold either.** On the benchmark they reach 65.6% at best, +2
+  questions. Gemini doesn't know the answer or our documents, so the HyDE passage and the
+  rewrites are guesses. In a mean, every wrong guess moves the whole vector away from the
+  question, so the means mostly add noise. Where they win, it looks more like a lucky
+  keyword than a better search.
+- **What holds is BM25 on the question with the rewrites appended.** Measured on BM25 alone,
+  the right document reaches its top 50 more often on both sets:
+
+  | BM25 query | Test | Dev |
+  |---|---:|---:|
+  | the question | 62.4% | 42.4% |
+  | the keyword rewrite alone | 52.0% | 49.2% |
+  | the question + 4 rewrites appended | **72.0%** | **59.3%** |
+
+  BM25 counts any word that matches, so a wrong guess costs little and one right "golden
+  keyword" pulls the document in. Appending keeps the question's own words, which the
+  keyword rewrite alone throws away. Against today's union, it gains 7 questions and loses
+  3 on the benchmark, and gains 6 and loses 3 on dev.
+- **The reranker loses most of the extra documents.** BM25 finds 10–17 points more right
+  documents, but only 3–4 more questions reach the top 5. They end up among
+  near-duplicates.
+- The 4 rewrites are one keyword query (our BM25 reads its `OR` and quotes as plain words, so
+  it works as a list of synonyms) and three descriptions of what the document would say. We
+  haven't checked whether fewer of them work as well.
+
 ## Why our own judge prompts, not Ragas
 
 Our two checks measure what Ragas calls *faithfulness* (are the statements backed by the
@@ -710,15 +888,46 @@ done (see the open points).
 - **The corpus is re-embedded on a rented 4 × RTX 4090** (512,052 chunks, the exact texts
   the base model embedded), then the benchmark is run once with the fine-tuned embedder.
 
+**13–15 November**
+
+- **The fine-tuned embedder on its own is not the fix for semantic questions.** It finds
+  more right documents, but BM25 already had most of them, and fusion cuts the rest. Other
+  embedders trained the same way (Qwen3-Embedding-0.6B) are parked for the same reason.
+- **The reranker gets the whole union of the gte and BM25 top 50, not the fused 50,** as
+  the next candidate: first measured on full text, so the result is representative. If it
+  holds on the benchmark, the question becomes how to make it faster.
+- **Query expansion must not add candidates.** Extra searches with rewritten queries are the
+  strongest (dev 69.5%), but the reranker would read about 390 documents per question. The
+  expansions are merged into the query before the search instead, keeping the reranker at
+  about 100 documents; the best merge (mean of question and HyDE vectors for gte, keyword
+  rewrite for BM25) gets dev semantic top 5 to 66.9%.
+
+**16 November**
+
+- **Rewrites go to BM25 only, appended to the question, and gte keeps the plain question.**
+  This setup holds on both dev and the benchmark (64.0% → 67.2% semantic top 5 on the
+  benchmark, with the same ~95 documents reranked). HyDE and vector means are dropped: the
+  LLM doesn't know the answer or our documents, so its guesses add noise to the gte vector.
+  Rewrites help BM25 because it only needs one right keyword.
+- **The gain is small, and the reranker is where it's lost.** BM25 finds 10–17 points more
+  right documents, but only 3–4 more questions reach the top 5. Brainstorming the next step
+  comes before any paid run.
+
 ## Open points
 
-- **Does the fine-tuned embedder hold on the benchmark?** Dev questions are ours; the
-  benchmark's 500 are the real test (after the corpus re-embedding).
+- **Why does the reranker lose the extra right documents BM25 finds?** And how many
+  rewrites does BM25 need (the keyword one alone appended, or all 4)?
+
+- **Does the union hold on the benchmark?** A full run with fine-tuned gte + union (paid,
+  about $4.50): do semantic questions reach about 60%, and do the other types lose?
+- **Speed of the union:** 6.3 s per question to rerank; e.g. cut documents to their first
+  1,024 tokens (see above).
+- **The 31 semantic right documents in neither top-50 list:** rewrites appended for BM25
+  bring that down to 24 (see above); routing (keywords or buckets, in the
+  document-growth map) is still open.
 - **Left for later:** a 5-epoch curve and a plateau learning-rate schedule.
-- **Qwen3-Embedding-0.6B fine-tune** (stopped at 60%, out of credit); about $1 to finish and
-  check on dev, about $5 more to re-embed the corpus.
-- **Routing for the 26 failures** whose right document isn't in the fused 300 (see the
-  end-to-end test): keywords or buckets, in the document-growth map.
+- **Qwen3-Embedding-0.6B fine-tune** (stopped at 60%, out of credit), parked: about $1 to
+  finish and check on dev, about $5 more to re-embed the corpus.
 - **Does a deeper list hurt the questions that already pass?** The end-to-end test ran on the
   46 failures only.
 

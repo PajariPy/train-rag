@@ -17,6 +17,7 @@ from train_rag.models import QuestionType
 from train_rag.pipelines.data_ingestion import run_data_ingestion
 from train_rag.pipelines.retrieval import run_retrieval
 from train_rag.progress.page import serve_progress_page
+from train_rag.progress.workflow_cli import add_workflow_commands, run_workflow_command
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     page = commands.add_parser("progress-page", help="serve a web page with the run's progress")
     page.add_argument("--port", type=int, default=8765)
+    add_workflow_commands(commands)
     keywords = commands.add_parser("index-bm25", help="build a BM25 keyword index on disk")
     keywords.add_argument(
         "--sample", type=int, help="only the cited documents plus N random distractors"
@@ -108,6 +110,9 @@ def main() -> None:
 
     if args.command == "progress-page":
         serve_progress_page(args.port)
+
+    if args.command == "workflow":
+        run_workflow_command(args)
 
     if args.command == "index-bm25":
         index_bm25(args.sample)

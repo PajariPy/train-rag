@@ -1,0 +1,77 @@
+downloading uv 0.13.9 x86_64-unknown-linux-gnu
+installing to /root/.local/bin
+  uv
+  uvx
+everything's installed!
+
+To add $HOME/.local/bin to your PATH, either restart your shell or run:
+
+    source $HOME/.local/bin/env (sh, bash, zsh)
+    source $HOME/.local/bin/env.fish (fish)
+WARN: The following commands are shadowed by other commands in your PATH: uv uvx
+Downloading cpython-3.13.18-linux-x86_64-gnu (download) (33.9MiB)
+ Downloaded cpython-3.13.18-linux-x86_64-gnu (download)
+   Updating https://github.com/huggingface/transformers (HEAD)
+    Updated https://github.com/huggingface/transformers (439bba079891ecd766900e8ce80ee961b94ef132)
+   Building transformers @ git+https://github.com/huggingface/transformers@439bba079891ecd766900e8ce80ee961b94ef132
+Downloading nvidia-cuda-cupti (11.4MiB)
+Downloading tokenizers (3.2MiB)
+Downloading hf-xet (4.1MiB)
+Downloading networkx (2.0MiB)
+Downloading nvidia-cufile (1.3MiB)
+Downloading pygments (1.2MiB)
+Downloading pydantic-core (2.2MiB)
+Downloading numpy (15.0MiB)
+Downloading pillow (6.8MiB)
+Downloading nvidia-cuda-nvrtc (44.8MiB)
+Downloading fla-core (1.0MiB)
+Downloading nvidia-cudnn-cu13 (495.1MiB)
+Downloading triton (272.4MiB)
+Downloading nvidia-cublas (386.1MiB)
+Downloading nvidia-nvshmem-cu13 (129.1MiB)
+Downloading nvidia-cusparselt-cu13 (162.3MiB)
+Downloading nvidia-cufft (208.1MiB)
+Downloading nvidia-cusolver (217.4MiB)
+Downloading nvidia-cusparse (144.0MiB)
+Downloading nvidia-nccl-cu13 (206.0MiB)
+Downloading nvidia-nvjitlink (44.5MiB)
+Downloading sympy (6.0MiB)
+Downloading nvidia-cuda-runtime (2.2MiB)
+Downloading wandb (19.8MiB)
+Downloading torch (514.2MiB)
+Downloading nvidia-cuda-cccl (3.9MiB)
+Downloading cuda-bindings (8.0MiB)
+Downloading torchvision (7.2MiB)
+ Downloaded fla-core
+ Downloaded pygments
+ Downloaded nvidia-cufile
+      Built transformers @ git+https://github.com/huggingface/transformers@439bba079891ecd766900e8ce80ee961b94ef132
+ Downloaded networkx
+ Downloaded pydantic-core
+ Downloaded nvidia-cuda-runtime
+ Downloaded tokenizers
+ Downloaded nvidia-cuda-cccl
+ Downloaded hf-xet
+ Downloaded sympy
+ Downloaded pillow
+ Downloaded torchvision
+ Downloaded cuda-bindings
+ Downloaded nvidia-cuda-cupti
+ Downloaded numpy
+ Downloaded wandb
+ Downloaded nvidia-nvjitlink
+ Downloaded nvidia-cuda-nvrtc
+ Downloaded nvidia-nvshmem-cu13
+ Downloaded nvidia-cusparse
+ Downloaded nvidia-cusparselt-cu13
+ Downloaded nvidia-cufft
+ Downloaded nvidia-nccl-cu13
+ Downloaded nvidia-cusolver
+ Downloaded triton
+ Downloaded nvidia-cublas
+ Downloaded nvidia-cudnn-cu13
+ Downloaded torch
+Installed 78 packages in 2.55s
+/tmp/.tmpA0okrt/archive-v0/Gg1aaKrDsD27Y6Bw/lib/python3.13/site-packages/triton/knobs.py:504: UserWarning: TRITON_DEFAULT_FP_FUSION is unset: defaulting to FP fusion ENABLED for backward compatibility in Triton 3.9. The default will change to DISABLED in Triton 3.10; set TRITON_DEFAULT_FP_FUSION=1 to keep fusion enabled or =0 to adopt the new default early and silence this warning.
+  warn_once(FP_FUSION_DEFAULT_WARNING)
+triton kernel ok 2.0

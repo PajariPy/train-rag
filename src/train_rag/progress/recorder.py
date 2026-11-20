@@ -7,6 +7,7 @@ from sqlalchemy import Engine
 from sqlmodel import Session
 
 from train_rag.repository.pipeline_run import start_run, update_run
+from train_rag.repository.workflow import set_step
 
 LOG_EVERY_SECONDS = 60
 
@@ -20,6 +21,10 @@ class RunProgress:
     when items differ in size. The run is marked `finished` when the block ends normally
     and `stopped` when it ends with an error or Ctrl+C. A plain line is also printed once
     a minute, for logs. Use it from one thread.
+
+    Inside a workflow (see `train_rag.repository.workflow`), pass its key and the step's
+    name: the step turns `running` with this run as its progress bar, then `success`, or
+    `failed` when the block ends with an error.
     """
 
     def __init__(
@@ -29,6 +34,8 @@ class RunProgress:
         total_items: int,
         total_chars: int = 0,
         unit: str = "documents",
+        workflow: str | None = None,
+        step: str | None = None,
     ) -> None:
         """Set up the record of one run.
 
@@ -38,9 +45,14 @@ class RunProgress:
             total_items: Items this run will process.
             total_chars: Their characters, or 0 to estimate time by items alone.
             unit: What the items are, e.g. `documents` or `questions`.
+            workflow: Key of the workflow this run is a step of, or None.
+            step: The step's name in that workflow.
         """
         self.session = Session(engine)
         self.run = start_run(self.session, pipeline, total_items, total_chars, unit)
+        self.workflow, self.step = workflow, step
+        if workflow and step:
+            set_step(self.session, workflow, step, "running", note="", run_id=self.run.id)
         self.logged = time.monotonic()
 
     def __enter__(self) -> "RunProgress":
@@ -60,6 +72,9 @@ class RunProgress:
         """Mark the run finished, or stopped when it ended with an error or Ctrl+C."""
         status = "finished" if exc_type is None else "stopped"
         update_run(self.session, self.run, self.run.stage, 0, 0, status)
+        if self.workflow and self.step:
+            outcome = "success" if exc_type is None else "failed"
+            set_step(self.session, self.workflow, self.step, outcome, note=self.run.note)
         self.session.close()
 
     def advance(self, stage: str, items: int, chars: int = 0, note: str | None = None) -> None:

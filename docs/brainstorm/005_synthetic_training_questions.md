@@ -133,3 +133,22 @@ found 16 + 13 such cross-split negatives in the first write; fixed, counts uncha
 
 Outputs: `exploration/training_questions/data/training_set.jsonl` (2,067) and `dev_set.jsonl`
 (422); each row has the question, type, source, up to 5 negatives and every reranker score.
+
+## Extended Slack semantic dev (16 November)
+
+The dev split has only 11 semantic questions with a Slack answer, too few to test mined Slack
+fields. `exploration/training_questions/slack_dev_sources.py` adds a split `dev_slack`:
+200 Slack threads, leaving out the benchmark answers and every train or dev source (each with
+its 20 nearest documents), every training negative (the fine-tuned gte learned to push those
+away), the field-extraction sample and the off-topic folders (66,195 excluded, 267,884 left).
+`generate.py` wrote one semantic question per thread with the benchmark's prompt ($0.038).
+
+**Not mined.** `mine.py` makes training data (hard negatives) and drops questions whose source
+the reranker doesn't put above the biggest drop. An evaluation set needs neither, and the drop
+would remove exactly the near-twin cases the field test is for. All 200 questions stay, like
+the benchmark's; each one's right document is its source thread.
+
+Baseline with today's best setup (`exploration/query_expansion/slack_dev_baseline.py`):
+right thread in the union 46.5%, reranked top 1 25.5%, **top 5 34.0%**, top 10 39.5%
+(benchmark semantic: 67.2% top 5). Appending the rewrites lifts BM25's top 50 from 29.5% to
+35.5% but not the top 5.
