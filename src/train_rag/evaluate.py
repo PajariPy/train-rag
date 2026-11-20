@@ -9,11 +9,17 @@ from sqlmodel import Session
 from train_rag.data_loaders import EnterpriseRagBenchLoader
 from train_rag.database import create_tables, get_engine
 from train_rag.evaluation import format_report, run_evaluation
-from train_rag.evaluation.agent_clarify import ClarifyingSnippetAgent
 from train_rag.evaluation.clarify_report import missing_memories
 from train_rag.evaluation.person import Person, SimulatedPerson
 from train_rag.evaluation.pipeline import PersonFactory
-from train_rag.evaluation.registry import JUDGES, PERSON_USAGE, RETRIEVERS, SYSTEMS, USAGE
+from train_rag.evaluation.registry import (
+    CLARIFYING_SYSTEMS,
+    JUDGES,
+    PERSON_USAGE,
+    RETRIEVERS,
+    SYSTEMS,
+    USAGE,
+)
 from train_rag.evaluation.retrieval import evaluate_retrieval, format_retrieval_report
 from train_rag.models import Question, QuestionType
 from train_rag.progress.recorder import RunProgress
@@ -48,8 +54,8 @@ def evaluate(
         The id of the stored run.
 
     Raises:
-        ValueError: If an id isn't a known question, or, for the clarifying agent, a
-            question has no memory note. Checked before any paid call.
+        ValueError: If an id isn't a known question, or, for a system that asks the
+            person, a question has no memory note. Checked before any paid call.
     """
     load_dotenv(ENV_FILE)
     engine = get_engine()
@@ -69,7 +75,7 @@ def evaluate(
             chosen = set(question_ids)
             questions = [question for question in questions if question.id in chosen]
         person_factory: PersonFactory | None = None
-        if system_name == ClarifyingSnippetAgent.name:
+        if system_name in CLARIFYING_SYSTEMS:
             ids = [question.id for question in questions]
             memories = load_memories(session, ids)
             missing = missing_memories(ids, memories)
