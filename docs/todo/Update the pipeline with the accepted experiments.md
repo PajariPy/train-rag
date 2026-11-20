@@ -33,3 +33,41 @@ Open choices, settle before the run:
 
 Checks: unit tests for the new parts; a 20-question smoke run before the full benchmark.
 Then [[Evaluate the full pipeline with clarifying questions]].
+
+## Result (20 Nov)
+Built on branch `feature-pipeline-agent` as two systems, `field-agent` (no asking) and
+`field-agent-clarify` (asks the simulated person at most 2 times). Both run with
+`uv run train-rag evaluate --system <name>`.
+
+- **General search as a tool.** The fixed first search became the agent's
+  `search_documents` tool: fine-tuned gte on the query, BM25 on the query with Gemini's 4
+  rewrites appended (`query_rewrite.py`), and the union of both reranked on the first
+  1,024 tokens (`RetrievalPipeline(union=True)`, `GteModernBertReranker(max_tokens=1024)`).
+  The agent decides which tool to call first.
+- **Mined fields** are stored in the `document_fields` table (raw output plus parsed fields,
+  one row per document and extractor) and in `document_field_vectors` (the subject, problem
+  and names profiles). `train-rag import-fields` loaded the DeepSeek labels (26,431 rows,
+  12,872 of them Slack), and `train-rag embed-fields` embedded them locally. The SLM's output
+  is imported with the same command as extractor `slm-<run>`; field search prefers `slm-`
+  rows, with no code change. Checked against the exploration index: top-10 overlap 297/300.
+- **The agent** (`evaluation/field_agent/`) uses Gemini Flash.
+  - Tools: `search_documents` and `search_fields` (areas, sources and channels filters), at
+    most 4 searches in total of which at most 2 general, plus `finish`.
+  - Its prompt documents the tools like v3 did, with a worked example that uses both tools.
+  - Its picks and every search's results are fused, reranked against the question, and the
+    top 5 become its final documents.
+- **The check** is a `judge_cases` turn on the same conversation, run on the final 5 in full
+  (cut at 12,000 characters) with the baseline prompt.
+  - When several cases fit and an ask is left, the agent asks and then finishes again (at
+    most 2 checks).
+  - Otherwise the answer shows the cases side by side (`side_by_side_note`).
+- **The answer** keeps the rule as it was: the main case plus similar cases, with `[n]`
+  citations turned into `[doc_id]` (`answer_from_hits`).
+- **Free retrieval check** (`evaluate-search --retriever hybrid-ft-union`: union rerank
+  on 1,024 tokens, no rewrites) on the 125 semantic benchmark questions: recall@5 62.4%,
+  recall@10 68.8%. Compare: union on full text, 64.0% of questions with a right document in
+  the top 5 (different measure, same order of size).
+- **Checks:** 285 local tests pass (Gemini mocked), along with ruff and mypy.
+
+Still to do: the 20-question smoke run (paid, waiting for the go), then
+[[Prepare the evaluation for the final run]].

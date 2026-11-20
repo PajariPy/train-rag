@@ -19,7 +19,7 @@ kanban-plugin: board
 
 ## Next
 
-- [ ] [[Update the pipeline with the accepted experiments]] #high
+- [ ] [[Prepare the evaluation for the final run]] #high
 - [ ] [[Rewrite the query from the chat history]] #high
 - [ ] [[Evaluate the full pipeline with clarifying questions]] #high
 - [ ] [[Detect out-of-scope questions]] #medium
@@ -34,6 +34,7 @@ kanban-plugin: board
 ## Done
 
 **Complete**
+- [x] [[Update the pipeline with the accepted experiments]] #done
 - [x] [[Show the agent where its results disagree]] #done
 - [x] [[Plan evaluation for data without a benchmark]] #medium
 - [x] [[Test mined fields as search filters]] #high
