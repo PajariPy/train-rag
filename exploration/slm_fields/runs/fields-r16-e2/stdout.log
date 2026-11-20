@@ -1,0 +1,42 @@
+   Updating https://github.com/huggingface/transformers (HEAD)
+    Updated https://github.com/huggingface/transformers (439bba079891ecd766900e8ce80ee961b94ef132)
+   Building transformers @ git+https://github.com/huggingface/transformers@439bba079891ecd766900e8ce80ee961b94ef132
+Downloading nvidia-cuda-nvrtc (44.8MiB)
+Downloading nvidia-nvjitlink (44.5MiB)
+Downloading nvidia-cufile (1.3MiB)
+Downloading networkx (2.0MiB)
+Downloading pygments (1.2MiB)
+Downloading pydantic-core (2.2MiB)
+Downloading nvidia-cufft (208.1MiB)
+Downloading nvidia-nccl-cu13 (206.0MiB)
+Downloading nvidia-cublas (386.1MiB)
+Downloading nvidia-cudnn-cu13 (495.1MiB)
+Downloading nvidia-cusparse (144.0MiB)
+Downloading sympy (6.0MiB)
+Downloading nvidia-cuda-runtime (2.2MiB)
+Downloading nvidia-cuda-cupti (11.4MiB)
+Downloading triton (272.4MiB)
+Downloading hf-xet (4.1MiB)
+Downloading nvidia-cusolver (217.4MiB)
+Downloading numpy (15.0MiB)
+Downloading nvidia-nvshmem-cu13 (129.1MiB)
+Downloading nvidia-cuda-cccl (3.9MiB)
+Downloading nvidia-cusparselt-cu13 (162.3MiB)
+Downloading tokenizers (3.2MiB)
+Downloading pillow (6.8MiB)
+Downloading torchvision (7.2MiB)
+Downloading torch (514.2MiB)
+Downloading cuda-bindings (8.0MiB)
+Downloading wandb (19.8MiB)
+Downloading fla-core (1.0MiB)
+ Downloaded fla-core
+ Downloaded pygments
+ Downloaded nvidia-cufile
+ Downloaded networkx
+      Built transformers @ git+https://github.com/huggingface/transformers@439bba079891ecd766900e8ce80ee961b94ef132
+ Downloaded pydantic-core
+ Downloaded nvidia-cuda-runtime
+ Downloaded tokenizers
+ Downloaded hf-xet
+ Downloaded nvidia-cuda-cccl
+ Downloaded sympy

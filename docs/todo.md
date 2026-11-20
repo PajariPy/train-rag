@@ -4,30 +4,53 @@ kanban-plugin: board
 
 ---
 
-## Next
-
-- [ ] Benchmark run with the fine-tuned embedder<br>train-rag evaluate with retriever hybrid-ft-rerank (weights in models/gte-modernbert-ft, vectors in the _768_ft tables), compared with the base run. Paid (Gemini judge): ask first.
-
-
 ## Later
 
-- [ ] Fine-tune other base embedders and compare with gte<br>e.g. jina-embeddings-v3, Qwen3-Embedding-0.6B: same training/dev sets and dev check as gte (exploration/embedder_finetune). Only gte has been fine-tuned so far; jina and Qwen were only tested as they are. Qwen first (better than gte as-is, no custom code). 12 Nov: Qwen run crashed at 60% (disk full), dropped for credit; rerun needs ~$1 + a 60 GB disk and save_total_limit=1, ~$5 more to re-embed the corpus.
-- [ ] Review the code map (docs/code-map, swyg on localhost:8770)
-- [ ] Port to LangGraph / LangChain<br>Evaluation agents, pipeline answering and judging, exploration scripts (label.py, judge_labels.py). Design first. Re-run agent baselines 18, 28–30 afterwards (paid).
-- [ ] Training-set minors from review<br>Neighbours of evaluation docs come from the first chunk only; score cache is keyed by doc_id and goes stale if questions are regenerated.
+- [ ] [[Measure pipeline speed and cost]] #medium
+- [ ] [[Add observability and RAG quality tracking]] #medium
+- [ ] [[Article - strategy for messier documents]] #low
+- [ ] [[Article - problems by metric and how to fix them]] #low
+- [ ] [[Article - future map]] #low
+- [ ] [[Approach human-style data problems]] #medium
+- [ ] [[Port to LangGraph and LangChain]] #medium
+- [ ] [[Training-set minors from review]] #low
+- [ ] [[Fine-tune other base embedders]] #low
+
+
+## Next
+
+- [ ] [[Update the pipeline with the accepted experiments]] #high
+- [ ] [[Rewrite the query from the chat history]] #high
+- [ ] [[Evaluate the full pipeline with clarifying questions]] #high
+- [ ] [[Detect out-of-scope questions]] #medium
+- [ ] [[Add guardrails]] #medium
+
+
+## In progress
+
+- [ ] [[Train the Slack field extractor SLM]] #high
 
 
 ## Done
 
 **Complete**
-- [x] Fine-tuned gte (lr5e-6-e2) and re-embedded the corpus: dev search, semantic in top 10 49% → 61% (article 006, 12 Nov)
-- [x] Synthetic train/dev sets: 2,067 / 422 questions, 5 hard negatives each (brainstorm 005)
+- [x] [[Show the agent where its results disagree]] #done
+- [x] [[Plan evaluation for data without a benchmark]] #medium
+- [x] [[Test mined fields as search filters]] #high
+- [x] [[Understand how data could be bucketed by content]] #high
+- [x] [[Build the Slack semantic dev set]]
+- [x] [[Try HyDE and query rewriting]]
+- [x] [[Union rerank check]]
+- [x] [[Benchmark run with the fine-tuned embedder]]
+- [x] [[Fine-tune gte and re-embed the corpus]]
+- [x] [[Synthetic train and dev sets]]
+- [x] [[Review the code map]]
 
 
 
 
 %% kanban:settings
 ```
-{"kanban-plugin":"board","list-collapse":[false,false,false]}
+{"kanban-plugin":"board","list-collapse":[false,false,false],"move-tags":true,"tag-colors":[{"tagKey":"#high","color":"rgba(250, 249, 251, 1)","backgroundColor":"rgba(167, 56, 56, 1)"},{"tagKey":"#medium","color":"rgba(255, 255, 255, 1)","backgroundColor":"rgba(159, 158, 52, 1)"},{"tagKey":"#low","color":"rgba(255, 255, 255, 1)","backgroundColor":"rgba(50, 61, 175, 1)"},{"tagKey":"#done","color":"rgba(255, 255, 255, 1)","backgroundColor":"rgba(76, 174, 27, 1)"}],"new-note-folder":"docs/todo"}
 ```
 %%

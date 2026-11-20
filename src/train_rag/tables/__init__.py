@@ -15,6 +15,7 @@ from train_rag.tables.parsed_document import ParsedDocumentRecord
 from train_rag.tables.pipeline_run import PipelineRunRecord
 from train_rag.tables.question import QuestionRecord
 from train_rag.tables.question_memory import QuestionMemoryRecord
+from train_rag.tables.workflow_step import WorkflowStepRecord
 
 __all__ = [
     "EMBEDDING_TABLES",
@@ -30,5 +31,6 @@ __all__ = [
     "PipelineRunRecord",
     "QuestionMemoryRecord",
     "QuestionRecord",
+    "WorkflowStepRecord",
     "tables_for",
 ]

@@ -12,7 +12,10 @@ from train_rag.evaluation.agent_keywords import KeywordAgentSystem
 from train_rag.evaluation.agent_snippets import SnippetAgentSystem
 from train_rag.evaluation.hybrid import PipelineRetriever
 from train_rag.evaluation.judge import AnswerJudge, GeminiJudge
-from train_rag.evaluation.pipeline_answer import PipelineAnswerSystem
+from train_rag.evaluation.pipeline_answer import (
+    FineTunedPipelineAnswerSystem,
+    PipelineAnswerSystem,
+)
 from train_rag.evaluation.summary_search import SummarySearchSystem
 from train_rag.evaluation.system import NoAnswerSystem, OracleSystem, RagSystem
 from train_rag.evaluation.usage import UsageMeter
@@ -38,6 +41,11 @@ SYSTEMS: dict[str, SystemFactory] = {
     ),
     PipelineAnswerSystem.name: lambda _questions: PipelineAnswerSystem(
         PipelineRetriever(RetrievalPipeline.load()), genai.Client(), USAGE
+    ),
+    FineTunedPipelineAnswerSystem.name: lambda _questions: FineTunedPipelineAnswerSystem(
+        PipelineRetriever(RetrievalPipeline.load(embedder=FineTunedGteEmbedder())),
+        genai.Client(),
+        USAGE,
     ),
     AgentSystem.name: lambda _questions: AgentSystem(
         PipelineRetriever(RetrievalPipeline.load()), genai.Client(), USAGE

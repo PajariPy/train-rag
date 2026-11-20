@@ -67,6 +67,14 @@ MODEL=1 ./fetch.sh                                # copy the trained model too
   `FILTER='geolocation notin [CN]'` when the machine has to download a model.
 - **Speed:** the first boot of a template can take minutes; `up.sh` uses the "PyTorch (Vast)"
   template, which is cached on many hosts. Copying ~800 MB back took ~10 minutes.
+- **Download fees can cost more than the GPU** (16 Nov): a 4090 at $0.37/h charged
+  $0.052/GB for downloads; installing vLLM and Qwen3.5-2B (8.4 GB) cost $0.44 against $0.09 of
+  GPU time. Check `inet_down_cost` in the offer and filter it (e.g. `inet_down_cost<0.005`)
+  when the job downloads packages or models.
+- **Hosts stuck in "loading":** give each offer about 6 minutes to boot, then destroy it and
+  take the next (`exploration/slack_extraction/vllm_bench.sh` tries up to 3, `SKIP=` leaves
+  out a bad one). Inside a `while read` loop over offers, read them from another file
+  descriptor or use `ssh -n`, or ssh eats the rest of the list.
 - **Costs seen** (12 Nov): 1 × RTX 4090 $0.37–0.39/h; 4 × RTX 4090 $1.9 (China) to $2.7/h
   (Hungary). gte fine-tune, 2 epochs: ~30 min of training + 2 × 4 min dev checks. Corpus
   re-embedding with gte on 4 × 4090: 21 min of compute, ~50 min of machine time with setup
