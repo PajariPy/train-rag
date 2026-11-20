@@ -45,10 +45,12 @@ def run_field_command(args: argparse.Namespace) -> None:
     load_dotenv(Path(".env"))
     engine = get_engine()
     create_tables(engine)
+
     if args.command == "import-fields":
         dataset = EnterpriseRagBenchLoader.name
         stored = import_fields(engine, args.file, args.extractor, args.prompt_key or None, dataset)
         print(f"Stored {stored:,} mined-field rows from {args.file} as {args.extractor}")
+
     if args.command == "embed-fields":
         done = embed_field_profiles(engine, FineTunedGteEmbedder(batch_size=EMBED_BATCH))
         print(f"Embedded the profiles of {done:,} mined-field rows")

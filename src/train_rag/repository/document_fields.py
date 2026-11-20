@@ -1,12 +1,18 @@
 """Queries for the mined fields of documents and their profile vectors."""
 
+import typing
 from collections.abc import Sequence
+from typing import Any
 
-from sqlalchemy import and_, func
+import numpy as np
+import numpy.typing as npt
+from sqlalchemy import Text, and_, cast, func
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import QueryableAttribute, defer
 from sqlmodel import Session, col, select
 
 from train_rag.tables import DocumentFieldsRecord, DocumentRecord, FieldVectorRecord
+from train_rag.tables.field_vector import PROFILE_DIMENSIONS
 
 FIELD_COLUMNS = ("doc_id", "source_type", "raw", "fields", "thread_kind", "status", "areas")
 
@@ -38,6 +44,8 @@ def document_keys(
 def upsert_document_fields(session: Session, records: Sequence[DocumentFieldsRecord]) -> None:
     """Store mined fields, replacing the same extractor's earlier fields of a document.
 
+    Commits.
+
     Args:
         session: Active database session.
         records: Fields to store.
@@ -52,6 +60,7 @@ def upsert_document_fields(session: Session, records: Sequence[DocumentFieldsRec
         set_={name: statement.excluded[name] for name in (*FIELD_COLUMNS, "channel", "created_at")},
     )
     session.execute(statement, rows)
+    session.commit()
 
 
 def fields_without_vectors(session: Session, model: str, limit: int) -> list[DocumentFieldsRecord]:
@@ -107,6 +116,8 @@ def count_fields_without_vectors(session: Session, model: str) -> int:
 def upsert_field_vectors(session: Session, records: Sequence[FieldVectorRecord]) -> None:
     """Store profile vectors, replacing a model's earlier vectors of the same fields.
 
+    Commits.
+
     Args:
         session: Active database session.
         records: Vectors to store.
@@ -121,32 +132,64 @@ def upsert_field_vectors(session: Session, records: Sequence[FieldVectorRecord])
         set_={name: statement.excluded[name] for name in ("subject", "problem", "names")},
     )
     session.execute(statement, rows)
+    session.commit()
 
 
-def fields_with_vectors(
-    session: Session, extractors: Sequence[str] | None, model: str
-) -> list[tuple[DocumentFieldsRecord, FieldVectorRecord]]:
-    """Load the mined fields of some extractors with their profile vectors.
+def load_document_fields(session: Session) -> list[DocumentFieldsRecord]:
+    """Load every mined fields row, without the raw extractor output.
 
     Args:
         session: Active database session.
-        extractors: Extractors to load, or None for all; a document may have rows of
-            several.
-        model: Embedding model of the vectors; fields without them are left out.
 
     Returns:
-        (fields, vectors) pairs, lowest fields id first.
+        The rows, lowest id first; `raw` is not loaded.
     """
     statement = (
-        select(DocumentFieldsRecord, FieldVectorRecord)
-        .join(
-            FieldVectorRecord,
-            col(FieldVectorRecord.document_fields_id) == col(DocumentFieldsRecord.id),
-        )
-        .where(FieldVectorRecord.model == model)
+        select(DocumentFieldsRecord)
+        .options(defer(typing.cast(QueryableAttribute[Any], DocumentFieldsRecord.raw)))
         .order_by(col(DocumentFieldsRecord.id))
     )
-    if extractors is not None:
-        statement = statement.where(col(DocumentFieldsRecord.extractor).in_(extractors))
 
-    return [(fields, vectors) for fields, vectors in session.exec(statement)]
+    return list(session.exec(statement))
+
+
+def profile_matrices(session: Session, model: str) -> dict[int, npt.NDArray[np.float32]]:
+    """Load a model's profile vectors as arrays, fast.
+
+    Vectors are read as text and parsed by numpy: building Python lists of floats for
+    every vector takes minutes and gigabytes.
+
+    Args:
+        session: Active database session.
+        model: Embedding model of the vectors.
+
+    Returns:
+        A (3, dimensions) float32 array (subject, problem, names; zeros for an empty
+        profile) keyed by mined fields row id.
+    """
+    statement = select(
+        FieldVectorRecord.document_fields_id,
+        cast(col(FieldVectorRecord.subject), Text),
+        cast(col(FieldVectorRecord.problem), Text),
+        cast(col(FieldVectorRecord.names), Text),
+    ).where(FieldVectorRecord.model == model)
+    zero = np.zeros(PROFILE_DIMENSIONS, dtype=np.float32)
+
+    def parse(value: str | None) -> npt.NDArray[np.float32]:
+        """Parse one vector's text, "[0.1,0.2,...]".
+
+        Args:
+            value: The vector as Postgres writes it, or None for an empty profile.
+
+        Returns:
+            The vector.
+        """
+        if value is None:
+            return zero
+
+        return np.array(value[1:-1].split(","), dtype=np.float32)
+
+    return {
+        fields_id: np.stack([parse(subject), parse(problem), parse(names)])
+        for fields_id, subject, problem, names in session.exec(statement)
+    }

@@ -10,12 +10,11 @@ import json
 from collections.abc import Iterator
 from itertools import batched
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy import Engine
 from sqlmodel import Session
 
-from train_rag.models.mined_fields import MinedFields
+from train_rag.models.mined_fields import LabelLine, MinedFields
 from train_rag.progress.recorder import RunProgress
 from train_rag.repository.document_fields import document_keys, upsert_document_fields
 from train_rag.repository.parsed_document import slack_channels
@@ -25,7 +24,7 @@ BATCH_SIZE = 500
 QUESTION_PREFIX = "question:"
 
 
-def read_labels(path: Path, prompt_key: str | None) -> Iterator[dict[str, Any]]:
+def read_labels(path: Path, prompt_key: str | None) -> Iterator[LabelLine]:
     """Read the document lines of a labels file.
 
     Args:
@@ -35,23 +34,25 @@ def read_labels(path: Path, prompt_key: str | None) -> Iterator[dict[str, Any]]:
     Yields:
         One line per labelled document, as written; the last line wins for a repeated id.
     """
-    rows: dict[str, dict[str, Any]] = {}
+    rows: dict[str, LabelLine] = {}
     with path.open() as file:
         for line in file:
             if not line.strip():
                 continue
-            row = json.loads(line)
-            if str(row.get("id", "")).startswith(QUESTION_PREFIX) or "id" not in row:
+
+            row = LabelLine.model_validate(json.loads(line))
+            if row.id.startswith(QUESTION_PREFIX):
                 continue
-            if prompt_key is not None and not str(row.get("key", "")).endswith(prompt_key):
+            if prompt_key is not None and not row.key.endswith(prompt_key):
                 continue
-            rows[row["id"]] = row
+
+            rows[row.id] = row
 
     yield from rows.values()
 
 
 def field_records(
-    rows: list[dict[str, Any]],
+    rows: list[LabelLine],
     keys: dict[str, list[tuple[int, str]]],
     channels: dict[int, str],
     extractor: str,
@@ -70,14 +71,14 @@ def field_records(
     records = []
     for row in rows:
         mined = MinedFields.from_label(row)
-        for document_id, source_type in keys.get(row["id"], []):
+        for document_id, source_type in keys.get(row.id, []):
             records.append(
                 DocumentFieldsRecord(
                     document_id=document_id,
-                    doc_id=row["id"],
+                    doc_id=row.id,
                     source_type=source_type,
                     extractor=extractor,
-                    raw=row,
+                    raw=row.model_dump(),
                     fields=mined.fields,
                     thread_kind=mined.thread_kind,
                     status=mined.status,
@@ -107,13 +108,14 @@ def import_fields(
     rows = list(read_labels(path, prompt_key))
     stored = 0
     title = f"import mined fields: {extractor} from {path.name}"
+
     with RunProgress(engine, title, len(rows)) as progress, Session(engine) as session:
         for batch in batched(rows, BATCH_SIZE, strict=False):
-            keys = document_keys(session, dataset, [row["id"] for row in batch])
+            keys = document_keys(session, dataset, [row.id for row in batch])
             ids = [document_id for found in keys.values() for document_id, _ in found]
             records = field_records(list(batch), keys, slack_channels(session, ids), extractor)
+
             upsert_document_fields(session, records)
-            session.commit()
             stored += len(records)
             progress.advance("importing", len(batch))
 

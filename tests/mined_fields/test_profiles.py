@@ -1,7 +1,7 @@
 """Tests for the mined fields model, the profile texts and the result cards."""
 
 from train_rag.mined_fields.profiles import field_card, plain_card, profiles, source_line
-from train_rag.models.mined_fields import MinedFields
+from train_rag.models.mined_fields import LabelLine, MinedFields
 
 
 def mined() -> MinedFields:
@@ -11,22 +11,25 @@ def mined() -> MinedFields:
         The fields.
     """
     return MinedFields.from_label(
-        {
-            "fields": {
-                "topic": ["429s after burst limit change"],
-                "concept": ["rate limiting"],
-                "bug": ["429 errors"],
-                "fix": ["idempotency keys", "raise burst", "revert"],
-                "client": ["acme-inc"],
-                "person": ["ana"],
-                "made_up_field": ["dropped"],
-            },
-            "labels": {
-                "thread_kind": "incident",
-                "status": "made up",
-                "area": ["API and SDK", "not an area", "API and SDK", "billing and pricing"],
-            },
-        }
+        LabelLine.model_validate(
+            {
+                "id": "d1",
+                "fields": {
+                    "topic": ["429s after burst limit change"],
+                    "concept": ["rate limiting"],
+                    "bug": ["429 errors"],
+                    "fix": ["idempotency keys", "raise burst", "revert"],
+                    "client": ["acme-inc"],
+                    "person": ["ana"],
+                    "made_up_field": ["dropped"],
+                },
+                "labels": {
+                    "thread_kind": "incident",
+                    "status": "made up",
+                    "area": ["API and SDK", "not an area", "API and SDK", "billing and pricing"],
+                },
+            }
+        )
     )
 
 

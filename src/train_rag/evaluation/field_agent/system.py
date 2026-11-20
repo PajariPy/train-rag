@@ -82,9 +82,7 @@ class FieldAgentSystem(ClarifyingSystem):
             The ready system.
         """
         embedder = FineTunedGteEmbedder()
-        pipeline = RetrievalPipeline.load(
-            embedder=embedder, union=True, rerank_tokens=SHORT_TOKENS
-        )
+        pipeline = RetrievalPipeline.load(embedder=embedder, union=True, rerank_tokens=SHORT_TOKENS)
 
         return cls(
             PipelineRetriever(pipeline), FieldIndex.load(get_engine(), embedder), client, usage
@@ -131,9 +129,11 @@ class FieldAgentSystem(ClarifyingSystem):
             f"Search question: {question}",
             declarations(can_ask=asks > 0),
         )
+
         searches = AgentSearches(self.retriever, self.index, self.rewriter)
         run = AgentLoop(chat, searches, question, person, asks).execute()
         self.usage.add_searches(len(run.searches))
+
         note = prompt("side_by_side_note") if run.side_by_side else ""
         answer = answer_from_hits(self.client, self.usage, question, run.documents, note)
 

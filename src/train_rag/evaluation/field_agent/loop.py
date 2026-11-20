@@ -61,7 +61,7 @@ class AgentLoop:
         self.done = False
 
     def allowed(self) -> list[str]:
-        """The tools the agent may call in the next turn.
+        """List the tools the agent may call in the next turn.
 
         Returns:
             Tool names.
@@ -82,6 +82,7 @@ class AgentLoop:
         """
         asking = self.max_asks * (1 + SEARCHES_PER_REPLY)
         turns = MAX_SEARCHES + asking + 2 * MAX_CHECKS + SPARE_TURNS
+
         for _turn in range(turns):
             calls = self.chat.step(self.allowed())
             if not calls:
@@ -89,8 +90,10 @@ class AgentLoop:
             self.handle(calls)
             if self.done:
                 break
+
         if not self.run.documents:  # never finished: rerank what the searches found
             self.final_documents([])
+
         self.run.searches = self.searches.records
         self.run.trace = self.chat.trace
 
@@ -144,12 +147,14 @@ class AgentLoop:
         ids = call.args.get("ids")
         self.run.picks = self.searches.resolve(ids if isinstance(ids, list) else [])
         documents = self.final_documents(self.run.picks)
+
         listing = "\n\n".join(
             f"[{self.searches.label(hit.doc_id)}] {source_line(hit.source_type.value, None)}:\n"
             f"{hit.text[:MAX_DOCUMENT_CHARS]}"
             for hit in documents
         )
         text = f"{prompt('case_check_turn')}\n\nQuestion: {self.question}\n\n{listing}"
+
         self.chat.reply(call, text, [hit.doc_id for hit in documents])
         self.checking = True
 
@@ -184,14 +189,18 @@ class AgentLoop:
             fits=self.searches.resolve(fits if isinstance(fits, list) else []),
         )
         self.run.checks.append(check)
+
         fitting = [hit for hit in self.run.documents if hit.doc_id in check.fits]
         self.run.documents = fitting + [
             hit for hit in self.run.documents if hit.doc_id not in check.fits
         ]
+
         can_ask = len(self.run.asks) < self.max_asks and len(self.run.checks) < MAX_CHECKS
+
         if check.verdict == SEVERAL and can_ask:
             self.chat.reply(call, prompt("case_check_ask", reasoning=check.reasoning))
             self.checking = False
+
             return
 
         self.run.side_by_side = check.verdict == SEVERAL

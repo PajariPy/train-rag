@@ -2,9 +2,23 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from train_rag.mined_fields.schema import AREAS, FIELD_FORMS, STATUSES, THREAD_KINDS
+
+
+class LabelLine(BaseModel):
+    """One line of a labels file, as DeepSeek's labelling or the SLM wrote it.
+
+    Other keys (relations, token counts, ...) are kept, so the line can be stored as is.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    key: str = ""
+    fields: dict[str, Any] = Field(default_factory=dict)
+    labels: dict[str, Any] = Field(default_factory=dict)
 
 
 class MinedFields(BaseModel):
@@ -79,7 +93,7 @@ class MinedFields(BaseModel):
         return list(dict.fromkeys(area for area in given if area in AREAS))[:3]
 
     @classmethod
-    def from_label(cls, row: dict[str, Any]) -> "MinedFields":
+    def from_label(cls, row: LabelLine) -> "MinedFields":
         """Read one line of the labels file (DeepSeek's or the SLM's, same shape).
 
         Args:
@@ -88,10 +102,10 @@ class MinedFields(BaseModel):
         Returns:
             The parsed fields.
         """
-        labels = row.get("labels") or {}
+        labels = row.labels
 
         return cls(
-            fields=row.get("fields") or {},
+            fields=row.fields,
             thread_kind=labels.get("thread_kind"),
             status=labels.get("status"),
             areas=labels.get("area") or [],

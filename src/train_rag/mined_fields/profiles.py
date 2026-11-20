@@ -44,7 +44,7 @@ def source_line(source_type: str, channel: str | None) -> str:
 
 
 def field_card(mined: MinedFields, snippet: str) -> str:
-    """One mined document as a search result: topic, areas, key facts and a snippet.
+    """Render one mined document as a result card: topic, areas, key facts and a snippet.
 
     Args:
         mined: Its mined fields.
@@ -67,7 +67,7 @@ def field_card(mined: MinedFields, snippet: str) -> str:
 
 
 def plain_card(title: str, snippet: str) -> str:
-    """A document without mined fields as a search result: title and snippet.
+    """Render a document without mined fields as a result card: title and snippet.
 
     Args:
         title: Its title.

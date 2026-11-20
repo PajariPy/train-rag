@@ -8,14 +8,14 @@ agent is shown gets a short id (`d1`, `d2`, ...) that stays the same for the con
 
 from typing import Any, Protocol
 
-from train_rag.evaluation.field_agent.tools import SEARCH_DOCUMENTS, SHOWN, SNIPPET_CHARS
+from train_rag.evaluation.field_agent.cards import listing, result_card
+from train_rag.evaluation.field_agent.tools import SEARCH_DOCUMENTS, SHOWN
 from train_rag.evaluation.hybrid import to_hits
 from train_rag.fusion import reciprocal_rank_fusion
 from train_rag.mined_fields.index import PROFILE_COLUMNS, FieldIndex
-from train_rag.mined_fields.profiles import field_card, plain_card, source_line
 from train_rag.mined_fields.schema import AREAS, SOURCE_KINDS
 from train_rag.models import SourceType
-from train_rag.models.field_agent import ToolCall
+from train_rag.models.field_agent import SearchRecord, ToolCall
 from train_rag.models.retrieval import RetrievedDocument, SearchHit
 from train_rag.query_rewrite import QueryRewriter
 
@@ -35,30 +35,43 @@ class DocumentSearch(Protocol):
     def search(
         self, query: str, limit: int, keyword_query: str | None = None
     ) -> list[RetrievedDocument]:
-        """Search the whole corpus and rerank."""
+        """Search the whole corpus and rerank the union of both searches.
+
+        Args:
+            query: What gte and the reranker read.
+            limit: Number of documents.
+            keyword_query: What BM25 searches instead, or None for the query.
+
+        Returns:
+            The documents, best first.
+        """
         ...
 
     def rerank(
         self, query: str, documents: list[RetrievedDocument], scores: dict[str, float]
     ) -> list[RetrievedDocument]:
-        """Order documents from any search by the reranker."""
+        """Order documents from any search by the reranker.
+
+        Args:
+            query: What the reranker reads with each document.
+            documents: The documents to order.
+            scores: Earlier scores for this query by doc id; filled with the new ones.
+
+        Returns:
+            The documents, most relevant first.
+        """
         ...
 
     def read_documents(self, doc_ids: list[str]) -> list[SearchHit]:
-        """Load documents' full text, title on top."""
+        """Load documents' full text, title on top.
+
+        Args:
+            doc_ids: Dataset ids.
+
+        Returns:
+            One hit per known id, in the order asked.
+        """
         ...
-
-
-def snippet(text: str) -> str:
-    """The start of a text, whitespace collapsed, as a result card shows it.
-
-    Args:
-        text: The text.
-
-    Returns:
-        Its first `SNIPPET_CHARS` characters.
-    """
-    return " ".join(text.split())[:SNIPPET_CHARS]
 
 
 class AgentSearches:
@@ -80,11 +93,11 @@ class AgentSearches:
         self.label_of: dict[str, str] = {}
         self.doc_of: dict[str, str] = {}
         self.rankings: dict[str, list[SearchHit]] = {}
-        self.records: list[dict[str, Any]] = []
+        self.records: list[SearchRecord] = []
         self.extra = 0  # searches added by the person's replies
 
     def label(self, doc_id: str) -> str:
-        """The short id the agent sees for a document, made on first sight.
+        """Return the agent's short id for a document, creating it on first sight.
 
         Args:
             doc_id: The dataset id.
@@ -117,14 +130,14 @@ class AgentSearches:
         )
 
     def allowed(self) -> list[str]:
-        """The search tools the agent may still call.
+        """List the search tools the agent may still call.
 
         Returns:
             Tool names; empty when the budget is used up.
         """
         if len(self.records) >= MAX_SEARCHES + self.extra:
             return []
-        general = sum(record["tool"] == SEARCH_DOCUMENTS for record in self.records)
+        general = sum(record.tool == SEARCH_DOCUMENTS for record in self.records)
         tools = ["search_fields"]
         if general < MAX_GENERAL_SEARCHES:
             tools.insert(0, SEARCH_DOCUMENTS)
@@ -161,13 +174,24 @@ class AgentSearches:
         """
         keyword_query = self.rewriter.keyword_query(query)
         documents = self.retriever.search(query, GENERAL_KEPT, keyword_query)
+
         name = f"{SEARCH_DOCUMENTS} {len(self.records) + 1}"
         self.rankings[name] = to_hits(documents)
-        self.records.append({"tool": SEARCH_DOCUMENTS, "query": query})
-        shown = documents[:SHOWN]
-        cards = [self.card(document.doc_id, document.title, document.text) for document in shown]
+        self.records.append(SearchRecord(tool=SEARCH_DOCUMENTS, query=query))
 
-        return self.listing(cards), [document.doc_id for document in shown]
+        shown = documents[:SHOWN]
+        cards = [
+            result_card(
+                self.index,
+                self.label(document.doc_id),
+                document.doc_id,
+                document.title,
+                document.text,
+            )
+            for document in shown
+        ]
+
+        return listing(cards), [document.doc_id for document in shown]
 
     def search_fields(self, query: str, args: dict[str, Any]) -> tuple[str, list[str]]:
         """Run a field search and show its top results.
@@ -189,7 +213,9 @@ class AgentSearches:
             for name in args.get("channels") or []
             if str(name).lstrip("#") in known
         ]
+
         found = self.index.search(query, profile, areas, sources, channels)
+
         name = f"search_fields {len(self.records) + 1}"
         self.rankings[name] = [
             SearchHit(
@@ -203,56 +229,27 @@ class AgentSearches:
             for rank, position in enumerate(found)
         ]
         self.records.append(
-            {
-                "tool": "search_fields",
-                "query": query,
-                "profile": profile,
-                "areas": areas,
-                "sources": sources,
-                "channels": channels,
-            }
+            SearchRecord(
+                tool="search_fields",
+                query=query,
+                profile=profile,
+                areas=areas,
+                sources=sources,
+                channels=channels,
+            )
         )
+
         shown = [self.index.doc_ids[position] for position in found[:SHOWN]]
         texts = {hit.doc_id: hit.text for hit in self.retriever.read_documents(shown)}
-        cards = [self.card(doc_id, "", texts.get(doc_id, "")) for doc_id in shown]
+        cards = [
+            result_card(self.index, self.label(doc_id), doc_id, "", texts.get(doc_id, ""))
+            for doc_id in shown
+        ]
 
-        return self.listing(cards), shown
-
-    def card(self, doc_id: str, title: str, text: str) -> str:
-        """One result as the agent sees it, with its short id.
-
-        Args:
-            doc_id: The document.
-            title: Its title, for a document without mined fields.
-            text: Its text (or best chunk).
-
-        Returns:
-            The card.
-        """
-        position = self.index.position.get(doc_id)
-        if position is None:
-            body = plain_card(title or text.split("\n", 1)[0], snippet(text))
-            where = ""
-        else:
-            body = field_card(self.index.mined[position], snippet(text))
-            where = source_line(self.index.sources[position], self.index.channels[position])
-
-        return f"[{self.label(doc_id)}] " + (f"({where}) " if where else "") + body
-
-    @staticmethod
-    def listing(cards: list[str]) -> str:
-        """Join result cards for the agent.
-
-        Args:
-            cards: The cards, best first.
-
-        Returns:
-            The tool output.
-        """
-        return "\n".join(cards) if cards else "No documents found: try other words or filters."
+        return listing(cards), shown
 
     def candidates(self, picks: list[str]) -> list[RetrievedDocument]:
-        """The documents the final rerank reads: the picks, then every search fused.
+        """Collect the documents the final rerank reads: the picks, then every search fused.
 
         Args:
             picks: The dataset ids the agent picked, best first.
@@ -263,6 +260,7 @@ class AgentSearches:
         everything = sum(len(hits) for hits in self.rankings.values())
         fused = reciprocal_rank_fusion(self.rankings, everything)
         by_id = {document.doc_id: document for document in fused}
+
         picked = [by_id[doc_id] for doc_id in picks if doc_id in by_id]
         chosen = set(picks)
         rest = [document for document in fused if document.doc_id not in chosen]

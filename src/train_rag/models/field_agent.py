@@ -18,6 +18,17 @@ class ToolCall(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
 
 
+class SearchRecord(BaseModel):
+    """One search the agent made: the tool, the query and, for field search, its settings."""
+
+    tool: str
+    query: str
+    profile: str | None = None
+    areas: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    channels: list[str] = Field(default_factory=list)
+
+
 class Verdict(BaseModel):
     """The agent's check of its final documents: does the answer depend on which is picked?
 
@@ -48,7 +59,7 @@ class AgentRun(BaseModel):
     documents: list[SearchHit] = Field(default_factory=list)
     picks: list[str] = Field(default_factory=list)
     candidates: int = 0
-    searches: list[dict[str, Any]] = Field(default_factory=list)
+    searches: list[SearchRecord] = Field(default_factory=list)
     asks: list[AgentAsk] = Field(default_factory=list)
     checks: list[Verdict] = Field(default_factory=list)
     side_by_side: bool = False
@@ -56,7 +67,7 @@ class AgentRun(BaseModel):
 
     @property
     def verdict(self) -> Verdict | None:
-        """The last check.
+        """Return the last check.
 
         Returns:
             The verdict, or None.

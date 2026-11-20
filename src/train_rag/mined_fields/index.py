@@ -16,14 +16,16 @@ from collections import Counter
 from collections.abc import Sequence
 
 import numpy as np
+import numpy.typing as npt
 from sqlalchemy import Engine
 from sqlmodel import Session
 
 from train_rag.embedder import Embedder
 from train_rag.mined_fields.profiles import PROFILES
 from train_rag.models.mined_fields import MinedFields
-from train_rag.repository.document_fields import fields_with_vectors
-from train_rag.tables import DocumentFieldsRecord, FieldVectorRecord
+from train_rag.repository.document_fields import load_document_fields, profile_matrices
+from train_rag.tables import DocumentFieldsRecord
+from train_rag.tables.field_vector import PROFILE_DIMENSIONS
 
 # Extractor name prefixes, preferred first; within one prefix the newest row wins.
 EXTRACTOR_PREFERENCE = ("slm-", "deepseek-")
@@ -33,7 +35,8 @@ KEPT = 300
 PROFILE_COLUMNS: dict[str, tuple[int, ...]] = {"subject": (0,), "problem": (1,), "names": (2,)}
 PROFILE_COLUMNS["all"] = (0, 1, 2)
 
-FieldRow = tuple[DocumentFieldsRecord, FieldVectorRecord]
+# A mined document's fields and its (3, dimensions) profile matrix.
+FieldRow = tuple[DocumentFieldsRecord, npt.NDArray[np.float32]]
 
 
 def preference(extractor: str) -> int:
@@ -73,21 +76,6 @@ def preferred_rows(rows: Sequence[FieldRow]) -> list[FieldRow]:
     return list(best.values())
 
 
-def unit_or_zero(vector: Sequence[float] | None) -> np.ndarray:
-    """A profile vector as float32, zeros when the profile was empty.
-
-    Args:
-        vector: The stored vector, or None.
-
-    Returns:
-        The vector.
-    """
-    if vector is None:
-        return np.zeros(768, dtype=np.float32)
-
-    return np.asarray(vector, dtype=np.float32)
-
-
 class FieldIndex:
     """The mined documents' profiles, searchable by a query text."""
 
@@ -95,7 +83,7 @@ class FieldIndex:
         """Hold the preferred row of every mined document.
 
         Args:
-            rows: Mined fields with their profile vectors, of any extractors.
+            rows: Mined fields with their profile matrices, of any extractors.
             embedder: The model that embedded the profiles; it embeds the queries.
         """
         kept = preferred_rows(rows)
@@ -109,14 +97,9 @@ class FieldIndex:
             for fields, _ in kept
         ]
         self.matrix = (
-            np.stack(
-                [
-                    np.stack([unit_or_zero(getattr(vectors, profile)) for profile in PROFILES])
-                    for _, vectors in kept
-                ]
-            )
+            np.stack([matrix for _, matrix in kept]).astype(np.float32)
             if kept
-            else np.zeros((0, len(PROFILES), 768), dtype=np.float32)
+            else np.zeros((0, len(PROFILES), PROFILE_DIMENSIONS), dtype=np.float32)
         )
         self.position = {doc_id: index for index, doc_id in enumerate(self.doc_ids)}
         self.embedder = embedder
@@ -134,7 +117,12 @@ class FieldIndex:
             The index.
         """
         with Session(engine) as session:
-            rows = fields_with_vectors(session, None, embedder.name)
+            matrices = profile_matrices(session, embedder.name)
+            rows = [
+                (fields, matrices[fields.id])
+                for fields in load_document_fields(session)
+                if fields.id in matrices
+            ]
 
         return cls(rows, embedder)
 
@@ -195,9 +183,11 @@ class FieldIndex:
         with self.lock:
             vector = np.asarray(self.embedder.embed([query])[0], dtype=np.float32)
         vector /= np.linalg.norm(vector) + 1e-9
+
         columns = PROFILE_COLUMNS.get(profile, PROFILE_COLUMNS["all"])
         scores = sum(self.matrix[:, column] @ vector for column in columns)
         scores = np.asarray(scores, dtype=np.float32)
+
         if areas:
             allowed = set(areas)
             scores[[not found & allowed for found in self.areas]] = -np.inf

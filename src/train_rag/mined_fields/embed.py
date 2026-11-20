@@ -70,7 +70,6 @@ def embed_field_profiles(engine: Engine, embedder: Embedder) -> int:
     with RunProgress(engine, title, total) as progress, Session(engine) as session:
         while records := fields_without_vectors(session, embedder.name, BATCH_SIZE):
             upsert_field_vectors(session, profile_vectors(records, embedder))
-            session.commit()
             done += len(records)
             progress.advance("embedding", len(records))
 

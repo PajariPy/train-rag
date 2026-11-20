@@ -110,8 +110,7 @@ def declarations(can_ask: bool) -> list[types.FunctionDeclaration]:
         tools.append(
             types.FunctionDeclaration(
                 name=ASK_USER,
-                description="Ask the person who asked the question one short clarifying "
-                "question.",
+                description="Ask the person who asked the question one short clarifying question.",
                 parameters_json_schema={
                     "type": "object",
                     "properties": {
@@ -152,9 +151,7 @@ def agent_instructions(
         max_searches=max_searches,
         max_general=max_general,
         mined=f"{len(index):,}",
-        mined_sources=", ".join(
-            f"{count:,} {source}" for source, count in sources.most_common()
-        ),
+        mined_sources=", ".join(f"{count:,} {source}" for source, count in sources.most_common()),
         areas="\n".join(f"- {area} ({areas[area]:,}): {AREA_GUIDE[area]}" for area in AREAS),
         sources="\n".join(
             f"- {source} ({sources[source]:,}): {kind}" for source, kind in SOURCE_KINDS.items()

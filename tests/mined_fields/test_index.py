@@ -7,7 +7,7 @@ import numpy as np
 
 from train_rag.embedder import Embedder
 from train_rag.mined_fields.index import FieldIndex, preferred_rows
-from train_rag.tables import DocumentFieldsRecord, FieldVectorRecord
+from train_rag.tables import DocumentFieldsRecord
 
 DIMENSIONS = 768
 
@@ -54,7 +54,7 @@ def row(
     channel: str | None = None,
     extractor: str = "deepseek-x",
     day: int = 1,
-) -> tuple[DocumentFieldsRecord, FieldVectorRecord]:
+) -> tuple[DocumentFieldsRecord, np.ndarray]:
     """Build one mined document with its profile vectors.
 
     Args:
@@ -67,7 +67,7 @@ def row(
         day: Day of the month it was stored.
 
     Returns:
-        The fields and vectors rows.
+        The fields row and its (3, dimensions) profile matrix.
     """
     fields = DocumentFieldsRecord(
         id=document_id,
@@ -81,12 +81,12 @@ def row(
         channel=channel,
         created_at=datetime(2026, 11, day, tzinfo=UTC),
     )
-    subject, problem, names = (None if value is None else axis(value) for value in vectors)
-    profile = FieldVectorRecord(
-        document_fields_id=document_id, model="axis", subject=subject, problem=problem, names=names
+    matrix = np.array(
+        [np.zeros(DIMENSIONS) if value is None else axis(value) for value in vectors],
+        dtype=np.float32,
     )
 
-    return fields, profile
+    return fields, matrix
 
 
 def index() -> FieldIndex:

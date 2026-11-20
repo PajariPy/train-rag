@@ -16,7 +16,7 @@ from train_rag.mined_fields.index import FieldIndex
 from train_rag.models import SourceType
 from train_rag.models.retrieval import RetrievedDocument, SearchHit
 from train_rag.query_rewrite import QueryRewriter
-from train_rag.tables import DocumentFieldsRecord, FieldVectorRecord
+from train_rag.tables import DocumentFieldsRecord
 
 DIMENSIONS = 768
 
@@ -258,10 +258,8 @@ def field_index(doc_ids: list[str]) -> FieldIndex:
             channel="billing",
             created_at=datetime(2026, 11, 1, tzinfo=UTC),
         )
-        vectors = FieldVectorRecord(
-            document_fields_id=number(doc_id), model="axis", subject=vector.tolist()
-        )
-        rows.append((fields, vectors))
+        matrix = np.stack([vector, np.zeros(DIMENSIONS), np.zeros(DIMENSIONS)]).astype(np.float32)
+        rows.append((fields, matrix))
 
     return FieldIndex(rows, AxisEmbedder())
 

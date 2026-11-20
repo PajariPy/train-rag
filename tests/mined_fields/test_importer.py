@@ -27,8 +27,8 @@ def test_read_labels_keeps_documents_of_one_prompt(tmp_path: Path) -> None:
     path = tmp_path / "labels.jsonl"
     write_labels(path)
     rows = list(read_labels(path, "new"))
-    assert [row["id"] for row in rows] == ["d1", "d2"]
-    assert rows[0]["fields"]["topic"] == ["second"]
+    assert [row.id for row in rows] == ["d1", "d2"]
+    assert rows[0].fields["topic"] == ["second"]
     assert len(list(read_labels(path, None))) == 2
 
 

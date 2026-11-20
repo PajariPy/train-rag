@@ -61,6 +61,7 @@ class GeminiChat:
         if self.pending:
             self.contents.append(types.Content(role="user", parts=self.pending))
             self.pending = []
+
         response = self.client.models.generate_content(
             model=GEMINI_MODEL,
             contents=self.contents,
@@ -78,6 +79,7 @@ class GeminiChat:
             ),
         )
         self.usage.add(response)
+
         if not response.candidates or response.candidates[0].content is None:
             raise ValueError("Gemini returned no candidate")
 
@@ -87,6 +89,7 @@ class GeminiChat:
             ToolCall(id=call.id, name=call.name or "", args=dict(call.args or {}))
             for call in response.function_calls or []
         ]
+
         used = response.usage_metadata
         self.trace.append(
             TraceStep(

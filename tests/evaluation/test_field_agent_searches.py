@@ -34,9 +34,9 @@ def test_field_search_drops_unknown_filter_values() -> None:
     )
     output, shown = agent.run(call)
     assert shown == ["m1"]
-    assert agent.records[0]["profile"] == "all"
-    assert agent.records[0]["areas"] == []
-    assert agent.records[0]["channels"] == []
+    assert agent.records[0].profile == "all"
+    assert agent.records[0].areas == []
+    assert agent.records[0].channels == []
     assert output.startswith("[d1] (chat thread #billing) topic of m1")
 
 

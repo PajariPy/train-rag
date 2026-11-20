@@ -62,7 +62,7 @@ class QueryRewriter:
         return parsed.queries[: self.count] if isinstance(parsed, Rewrites) else []
 
     def keyword_query(self, question: str) -> str:
-        """The text BM25 searches: the question with its rewrites appended.
+        """Build the text BM25 searches: the question with its rewrites appended.
 
         Args:
             question: The question or the agent's query.
