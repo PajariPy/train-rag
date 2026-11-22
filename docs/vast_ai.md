@@ -79,3 +79,14 @@ MODEL=1 ./fetch.sh                                # copy the trained model too
   (Hungary). gte fine-tune, 2 epochs: ~30 min of training + 2 × 4 min dev checks. Corpus
   re-embedding with gte on 4 × 4090: 21 min of compute, ~50 min of machine time with setup
   and copying, ~$2.30.
+- **SLM training and scoring (20–21 Nov), `exploration/slm_fields/`:**
+  - A dropped ssh during setup made the script read the fast-kernel flag as empty and train
+    on the slow path (68 s/step instead of 16): $0.46 lost. Now every ssh call has a
+    `timeout`, setup and training run detached, and a missing flag stops the run.
+  - `ssh -n` reads stdin from /dev/null, so a heredoc sent through it (`remote 'cat > f' <<EOF`)
+    arrives as an **empty file**: the job never started and the GPU idled 30 min. Send files
+    with plain `ssh` (no `-n`); keep `-n` for commands.
+  - Never edit a shell script while it runs: bash reads it as it goes, and an edit made
+    mid-run caused a syntax error near the end (the cleanup still ran).
+  - Qwen3.5-2B LoRA r16, 2 epochs, 14,919 examples (median 3,729 tokens): 9.6 h on one
+    4090 at $0.40/h. vLLM 0.33.0 on the merged model: 12,711 documents in 80 min.

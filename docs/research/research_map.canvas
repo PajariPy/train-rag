@@ -1699,7 +1699,8 @@
 			"width": 520,
 			"height": 430,
 			"x": 4520,
-			"y": 16028
+			"y": 16028,
+			"text": "## 9 · SLM training plan: all sources (20 Nov)\n**Why:** field search needs fields for the whole corpus (511,962 documents), not the 24k DeepSeek labelled. One Qwen3.5-2B LoRA for every source, so nothing is left for later.\n- Labels: 12,930 for training (6,289 Slack, 5,640 other sources, 1,001 questions) + ~2,000 extra for the thin sources.\n- Weights & Biases logging (project train-rag-fields).\n- Todo: [[Train the Slack field extractor SLM]]"
 		},
 		{
 			"id": "d_s9a",
@@ -1708,7 +1709,8 @@
 			"width": 520,
 			"height": 330,
 			"x": 5120,
-			"y": 16092
+			"y": 16092,
+			"text": "## 9a · Train / held-out split\nThe near 50/50 comes from the 200 dev questions: half B's 12,531 candidate documents are never trained on, so the field-search test can be rerun with the SLM's own fields fairly.\n- ✗ 70/30 re-split: leaves 60 questions for that test, too few with 6–10 points of run-to-run noise.\n- ✓ ~2,000 extra DeepSeek labels instead (≈ $2.10): Gmail is 24% of the corpus but 9% of training."
 		},
 		{
 			"id": "d_dec9a",
@@ -1717,7 +1719,8 @@
 			"width": 520,
 			"height": 180,
 			"x": 5720,
-			"y": 16092
+			"y": 16092,
+			"text": "### ✓ Decision (20 Nov): keep the split, add 2k labels\nMore labels instead of a re-split; the half-B search test stays at 100 questions."
 		},
 		{
 			"id": "d_s9b",
@@ -1726,7 +1729,8 @@
 			"width": 520,
 			"height": 180,
 			"x": 5120,
-			"y": 16570
+			"y": 16570,
+			"text": "## 9b · Cross-validation?\n5 folds = 5 trainings: ≈ $15 and 30+ GPU hours.\n- One run is enough to decide: 13–15k examples, every held-out document scored (≈ ±1–2 points)."
 		},
 		{
 			"id": "d_stop9b",
@@ -1735,16 +1739,18 @@
 			"width": 520,
 			"height": 270,
 			"x": 5720,
-			"y": 16570
+			"y": 16570,
+			"text": "### ⏸ Stopped: cross-validation (no budget)\nWould be the right check, but costs five trainings.\n**Reopen if** the budget allows, or the held-out score is borderline (then first a second run with one changed setting, ≈ $3)."
 		},
 		{
 			"id": "d_s9c",
 			"type": "text",
 			"color": "5",
 			"width": 520,
-			"height": 360,
+			"height": 400,
 			"x": 5120,
-			"y": 16924
+			"y": 16924,
+			"text": "## 9c · Cost plan (fine-tuning first)\n- 2,000 extra labels: ≈ $2.10\n- Smoke run + setup: ≈ $1.00\n- LoRA, 2 epochs, ~14.9k examples, ≈ 6.5 h on a 4090: ≈ $2.70\n- Scoring 12.5k held-out: ≈ $0.20\n- Fees, failed boots: ≈ $0.50–1.00\n- **Total ≈ $6.50–7** (+ ≈ $3 for a second run)\n- Then mining 512k documents: ≈ $9–13 (DeepSeek: ≈ $500)."
 		},
 		{
 			"id": "d_next9",
@@ -1753,7 +1759,8 @@
 			"width": 520,
 			"height": 230,
 			"x": 5120,
-			"y": 17344
+			"y": 19454,
+			"text": "### ? Next (22 Nov)\n1. ✓ Training, held-out score, level 1 field search.\n2. Level 2: agent + reranker on half B (small Gemini cost), or skip.\n3. Mine the corpus (≈ $9–13; Vast top-up needed)."
 		},
 		{
 			"id": "path-d_s9b",
@@ -1779,13 +1786,63 @@
 			"height": 378
 		},
 		{
+			"id": "d_s9d",
+			"type": "text",
+			"color": "5",
+			"width": 520,
+			"x": 5120,
+			"y": 17384,
+			"text": "## 9d · Training run fields-r16-e2 (20–21 Nov)\n**Why:** one LoRA (Qwen3.5-2B, r16, 2 epochs) on DeepSeek's labels for every source.\n- ✓ Extra labels: 1,998 of 2,000, DeepSeek $1.84 → 14,919 training examples.\n- ✓ 1,866 steps in 9.6 h on an RTX 4090 ($0.40/h, fast DeltaNet kernels); planned 6.5 h.\n- ✓ Loss 0.46 → 0.14; eval loss (400 held-out) 0.247 → 0.171, flat from step ~1,600: no overfitting, a third epoch would add little.\n- ✗ First attempt lost: ssh dropped during setup, slow path (68 s/step), destroyed ($0.46). Scripts hardened (timeouts, detached jobs).\n- First look, 20 held-out docs: JSON valid 100%, mean field F1 vs DeepSeek 0.78. Weak: decision 0.30, impact 0.40, action_item 0.56.\n- **Cost:** $1.84 labels + $5.23 GPU = **$7.07** (plan ≈ $6.50–7).\n- W&B: rag-train/train-rag-fields, run fields-r16-e2.",
+			"height": 700
+		},
+		{
+			"id": "d_s9e",
+			"type": "text",
+			"color": "5",
+			"width": 520,
+			"height": 700,
+			"text": "## 9e · Held-out score: 12,711 documents (21 Nov)\n**Why:** decide on all held-out documents, per source, whether the SLM can replace DeepSeek for mining.\n- ✓ JSON valid 99.5%; 0.4% hit the token limit. 80 min of vLLM on one 4090, $0.74.\n- ✓ Every source close: word F1 0.73 (Fireflies) – 0.81 (Gmail); Slack 0.79; all 0.785.\n- ✓ Names as DeepSeek writes them (exact value F1): person 0.98, client 0.90, region 0.88, identifier 0.81.\n- Phrases agree in words, not wording: topic 0.75 word / 0.16 exact; bug, cause, fix alike.\n- ✗ Weak: decision 0.55, impact 0.59 (judgement fields).\n- Zero-shot GLiNER: 0.41 exact vs DeepSeek (13 threads); SLM: 0.57.\n- Fine-tuning total: **$7.84**.\n- Report: exploration/slm_fields/runs/fields-r16-e2/score.md",
+			"x": 5120,
+			"y": 18144
+		},
+		{
+			"id": "d_dec9e",
+			"type": "text",
+			"color": "4",
+			"width": 520,
+			"height": 210,
+			"text": "### ✓ Result (21 Nov): passes the go criteria\nParse rate ≥ 98% and names at DeepSeek's level. Before mining: the half-B field-search test on the SLM's own fields.",
+			"x": 5720,
+			"y": 18144
+		},
+		{
+			"id": "d_s9f",
+			"type": "text",
+			"color": "5",
+			"width": 520,
+			"height": 490,
+			"text": "## 9f · Fine-tuning works: field search on the SLM's fields (22 Nov)\n**Why:** agreeing with DeepSeek isn't the goal; finding the right thread is.\nHalf B's 100 dev questions, pool = 12,511 held-out documents, the same field search with each extractor's own fields; no agent, no reranker.\n- ✓ Top 10 / 50 / 100: DeepSeek 38 / 68 / 80, **SLM 38 / 66 / 80** (median rank 19 vs 23).\n- ✗ Slightly weaker deeper: top 300 90% vs 96%.\n- Not compared with the hybrid search: the pipeline runs both together.\n- Report: exploration/slm_fields/runs/fields-r16-e2/field_search.md",
+			"x": 5120,
+			"y": 18904
+		},
+		{
+			"id": "d_dec9f",
+			"type": "text",
+			"color": "4",
+			"width": 520,
+			"height": 180,
+			"text": "### ✓ Result (22 Nov): the SLM can stand in for DeepSeek\nSame search quality at top 10–100; gaps are within one-question noise.",
+			"x": 5720,
+			"y": 18904
+		},
+		{
 			"id": "lane-d_p0",
 			"type": "group",
 			"label": "",
 			"x": 4400,
 			"y": 780,
 			"width": 80,
-			"height": 16794,
+			"height": 18904,
 			"styleAttributes": {
 				"border": "invisible"
 			}
@@ -2771,6 +2828,41 @@
 			"id": "e_d_s9_d_next9",
 			"fromNode": "d_s9",
 			"toNode": "d_next9",
+			"fromSide": "right",
+			"toSide": "left"
+		},
+		{
+			"id": "e_d_s9_d_s9d",
+			"fromNode": "d_s9",
+			"toNode": "d_s9d",
+			"fromSide": "right",
+			"toSide": "left"
+		},
+		{
+			"id": "e_d_s9_d_s9e",
+			"fromNode": "d_s9",
+			"toNode": "d_s9e",
+			"fromSide": "right",
+			"toSide": "left"
+		},
+		{
+			"id": "e_d_s9e_d_dec9e",
+			"fromNode": "d_s9e",
+			"toNode": "d_dec9e",
+			"fromSide": "right",
+			"toSide": "left"
+		},
+		{
+			"id": "e_d_s9_d_s9f",
+			"fromNode": "d_s9",
+			"toNode": "d_s9f",
+			"fromSide": "right",
+			"toSide": "left"
+		},
+		{
+			"id": "e_d_s9f_d_dec9f",
+			"fromNode": "d_s9f",
+			"toNode": "d_dec9f",
 			"fromSide": "right",
 			"toSide": "left"
 		}

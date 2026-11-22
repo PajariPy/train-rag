@@ -7,6 +7,9 @@
 # Here every ssh call has a timeout, the job is launched fully detached (setsid), and the
 # flag is read with retries.
 #
+# WATCH_ONLY=1 skips the launch and only watches a training that already runs (e.g. after the
+# local monitor died with the terminal session); start it detached (setsid nohup) for that.
+#
 # Usage: INSTANCE=<id> HOST=<ip> PORT=<port> KEY="<workflow key>" NAME=<run name> \
 #        [MAX_HOURS=14] [TRAIN_ARGS=...] exploration/slm_fields/attach_train.sh
 set -uo pipefail
@@ -56,12 +59,14 @@ for _ in 1 2 3 4 5; do FLA=$(remote 'cat /workspace/job/fla_flag' 2>/dev/null) &
 [ -z "$FLA" ] && { log "fast kernels not confirmed; not starting a 50-hour slow run"; exit 1; }
 log "fast kernels: $FLA"
 
+if [ -z "${WATCH_ONLY:-}" ]; then  # WATCH_ONLY=1: the training already runs; only watch it
 remote "pkill -f 'train.py --data . --out smoke' || true"  # the smoke run's sample generations
 sleep 5
 CURRENT=$FULL; wf step "$FULL" running --note "W&B rag-train/train-rag-fields, run $NAME"
 remote "cd /workspace/job && mkdir -p out && rm -f out/exit_code && setsid nohup bash -c '. ./.secrets; export PATH=\$HOME/.local/bin:\$PATH; \
   uv run --no-project --python 3.13 $PKGS $FLA python train.py --data . --out out --name $NAME $TRAIN_ARGS > out/stdout.log 2>&1; \
   echo \$? > out/exit_code' > /dev/null 2>&1 < /dev/null &" || { log "launch failed"; exit 1; }
+fi
 log "training started: W&B rag-train/train-rag-fields, run $NAME"
 
 DEADLINE=$(( $(date +%s) + MAX_HOURS * 3600 ))

@@ -1,0 +1,208 @@
+{
+ "pool": 12511,
+ "questions": 100,
+ "reached": 55,
+ "missed": 45,
+ "slm_outputs_not_parsed": 65,
+ "deepseek_vectors_from_cache": 12611,
+ "today: raw gte, same pool": {
+  "reached": {
+   "top10": 40.0,
+   "top50": 58.2,
+   "top100": 85.5,
+   "top300": 89.1,
+   "median rank": 21
+  },
+  "missed": {
+   "top10": 2.2,
+   "top50": 2.2,
+   "top100": 42.2,
+   "top300": 80.0,
+   "median rank": 126
+  }
+ },
+ "today: hybrid, whole corpus": {
+  "reached": {
+   "top10": 74.5,
+   "top50": 87.3,
+   "top100": 87.3,
+   "top300": 87.3,
+   "median rank": 1
+  },
+  "missed": {
+   "top10": 0.0,
+   "top50": 0.0,
+   "top100": 0.0,
+   "top300": 0.0,
+   "median rank": "not found"
+  },
+  "all": {
+   "top10": 41.0,
+   "top50": 48.0,
+   "top100": 48.0,
+   "top300": 48.0,
+   "median rank": "not found"
+  }
+ },
+ "today: hybrid, same pool": {
+  "reached": {
+   "top10": 74.5,
+   "top50": 87.3,
+   "top100": 87.3,
+   "top300": 87.3,
+   "median rank": 1
+  },
+  "missed": {
+   "top10": 0.0,
+   "top50": 0.0,
+   "top100": 0.0,
+   "top300": 0.0,
+   "median rank": "not found"
+  },
+  "all": {
+   "top10": 41.0,
+   "top50": 48.0,
+   "top100": 48.0,
+   "top300": 48.0,
+   "median rank": "not found"
+  }
+ },
+ "DeepSeek: subject": {
+  "reached": {
+   "top10": 47.3,
+   "top50": 74.5,
+   "top100": 80.0,
+   "top300": 89.1,
+   "median rank": 13
+  },
+  "missed": {
+   "top10": 20.0,
+   "top50": 40.0,
+   "top100": 66.7,
+   "top300": 93.3,
+   "median rank": 66
+  },
+  "all": {
+   "top10": 35.0,
+   "top50": 59.0,
+   "top100": 74.0,
+   "top300": 91.0,
+   "median rank": 25
+  }
+ },
+ "DeepSeek: subject+problem": {
+  "reached": {
+   "top10": 54.5,
+   "top50": 80.0,
+   "top100": 85.5,
+   "top300": 100.0,
+   "median rank": 8
+  },
+  "missed": {
+   "top10": 20.0,
+   "top50": 42.2,
+   "top100": 73.3,
+   "top300": 93.3,
+   "median rank": 63
+  },
+  "all": {
+   "top10": 39.0,
+   "top50": 63.0,
+   "top100": 80.0,
+   "top300": 97.0,
+   "median rank": 22
+  }
+ },
+ "DeepSeek: all": {
+  "reached": {
+   "top10": 52.7,
+   "top50": 85.5,
+   "top100": 89.1,
+   "top300": 98.2,
+   "median rank": 10
+  },
+  "missed": {
+   "top10": 20.0,
+   "top50": 46.7,
+   "top100": 68.9,
+   "top300": 93.3,
+   "median rank": 61
+  },
+  "all": {
+   "top10": 38.0,
+   "top50": 68.0,
+   "top100": 80.0,
+   "top300": 96.0,
+   "median rank": 19
+  }
+ },
+ "SLM: subject": {
+  "reached": {
+   "top10": 47.3,
+   "top50": 80.0,
+   "top100": 85.5,
+   "top300": 92.7,
+   "median rank": 13
+  },
+  "missed": {
+   "top10": 17.8,
+   "top50": 48.9,
+   "top100": 55.6,
+   "top300": 80.0,
+   "median rank": 63
+  },
+  "all": {
+   "top10": 34.0,
+   "top50": 66.0,
+   "top100": 72.0,
+   "top300": 87.0,
+   "median rank": 24
+  }
+ },
+ "SLM: subject+problem": {
+  "reached": {
+   "top10": 52.7,
+   "top50": 83.6,
+   "top100": 89.1,
+   "top300": 96.4,
+   "median rank": 8
+  },
+  "missed": {
+   "top10": 20.0,
+   "top50": 48.9,
+   "top100": 71.1,
+   "top300": 86.7,
+   "median rank": 53
+  },
+  "all": {
+   "top10": 38.0,
+   "top50": 68.0,
+   "top100": 81.0,
+   "top300": 92.0,
+   "median rank": 26
+  }
+ },
+ "SLM: all": {
+  "reached": {
+   "top10": 52.7,
+   "top50": 83.6,
+   "top100": 90.9,
+   "top300": 96.4,
+   "median rank": 8
+  },
+  "missed": {
+   "top10": 20.0,
+   "top50": 44.4,
+   "top100": 66.7,
+   "top300": 82.2,
+   "median rank": 55
+  },
+  "all": {
+   "top10": 38.0,
+   "top50": 66.0,
+   "top100": 80.0,
+   "top300": 90.0,
+   "median rank": 23
+  }
+ }
+}

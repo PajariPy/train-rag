@@ -55,7 +55,7 @@
 		{
 			"id": "t3",
 			"type": "text",
-			"text": "## 1 · [[Train the Slack field extractor SLM]]\nLoRA on the DeepSeek labels (half A + random threads + questions); score on the held-out 200; mine all Slack.\n**Unblocks:** field search over all Slack, not only the 24k labelled pool.",
+			"text": "## 1 · [[Mine the corpus with the SLM]]\nThe fine-tuned extractor (held-out word F1 0.785, same field search as DeepSeek: 38 / 66 / 80) over all 512k documents; import and embed the fields. ≈ $9–13, Vast top-up first.\n**Unblocks:** field search over the whole corpus for the final evaluation.",
 			"x": 0,
 			"y": 74,
 			"width": 460,
@@ -84,7 +84,7 @@
 		{
 			"id": "title",
 			"type": "text",
-			"text": "# Roadmap\n⬇ in order. Re-questioning is solved (20 Nov): right answer in 96.4% of the ambiguity set. Now: the SLM, the full pipeline, the final evaluation.",
+			"text": "# Roadmap\n⬇ in order. The SLM is trained and scored (22 Nov): it searches as well as DeepSeek's labels. Now: mine the corpus, then the final evaluation.",
 			"x": 0,
 			"y": -260,
 			"width": 460,
