@@ -41,3 +41,8 @@ exploration/training_questions/data/uuid_index.json
 
 # Weights & Biases local run files
 /wandb/
+# SLM field-extractor runs: keep the reports and logs, not the big artefacts
+exploration/slm_fields/runs/*/adapter/
+exploration/slm_fields/runs/*/outputs.jsonl
+exploration/slm_fields/runs/*/prompts.jsonl
+exploration/slm_fields/runs/*/*.npz

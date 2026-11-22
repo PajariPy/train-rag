@@ -1,0 +1,85 @@
+12711 held-out documents
+08:38:33 credit before: 4.73
+08:38:49 renting offer 49545596 at $0.4/h
+08:41:20 ssh ok (183.89.209.74:55163), $0.4/h
+08:43:24 setting up: 
+08:44:35 setting up: 
+08:45:46 setting up: 
+08:46:57 setting up: 
+08:48:08 setting up: 
+08:49:19 setting up: 
+08:50:31 setting up: 
+08:51:42 setting up: 
+08:52:53 setting up: 
+08:54:04 setting up: 
+08:55:15 setting up: 
+08:56:26 setting up: 
+08:57:37 setting up: 
+08:58:50 setting up: 
+09:00:01 setting up: 
+09:01:13 setting up: 
+09:02:24 setting up: 
+09:03:36 setting up: 
+09:04:48 setting up: 
+09:05:59 setting up: 
+09:07:11 setting up: 
+09:08:23 setting up: 
+09:09:34 setting up: 
+09:10:46 setting up: 
+09:11:57 setting up:  Downloaded pillow
+09:13:08 setting up: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and 
+09:14:29 setting up: Loading weights:   0%|          | 0/617 [00:00<?, ?it/s]Loading weights:  54%|█████▍    | 332/617 [00:00<0
+09:15:40 setting up: merged into merged
+09:16:52 setting up: merged into merged
+09:18:03 setting up: merged into merged
+09:19:14 setting up: merged into merged
+09:20:30 setting up: merged into merged
+09:21:55 documents 0/12711
+09:23:24 documents 0/12711
+09:24:48 documents 512/12711
+09:26:12 documents 512/12711
+09:27:36 documents 512/12711
+09:29:00 documents 1024/12711
+09:30:24 documents 1024/12711
+09:31:48 documents 1536/12711
+09:33:12 documents 1536/12711
+09:34:36 documents 2048/12711
+09:36:01 documents 2048/12711
+09:37:25 documents 2560/12711
+09:38:49 documents 2560/12711
+09:40:13 documents 3072/12711
+09:41:37 documents 3072/12711
+09:43:02 documents 3584/12711
+09:44:25 documents 4096/12711
+09:45:50 documents 4096/12711
+09:47:19 documents 4608/12711
+09:48:49 documents 4608/12711
+09:50:19 documents 5120/12711
+09:51:42 documents 5120/12711
+09:53:06 documents 5632/12711
+09:54:30 documents 6144/12711
+09:55:54 documents 6144/12711
+09:57:18 documents 6656/12711
+09:58:43 documents 7168/12711
+10:00:07 documents 7168/12711
+10:01:30 documents 7680/12711
+10:02:55 documents 8192/12711
+10:04:19 documents 8192/12711
+10:05:45 documents 8704/12711
+10:07:09 documents 9216/12711
+10:08:34 documents 9216/12711
+10:09:58 documents 9728/12711
+10:11:22 documents 10240/12711
+10:12:45 documents 10240/12711
+10:14:09 documents 10752/12711
+10:15:33 documents 11264/12711
+10:16:57 documents 11264/12711
+10:18:21 documents 11776/12711
+10:19:45 documents 11776/12711
+10:21:09 documents 12288/12711
+10:22:33 documents 12711/12711
+exploration/slm_fields/vast_score.sh: line 134: syntax error near unexpected token `|'
+exploration/slm_fields/vast_score.sh: line 134: `| cut -c1-120)"'
+10:22:33 copying results back to /home/pajari/projects/rag-implementation/train-rag/exploration/slm_fields/runs/fields-r16-e2
+10:22:54 destroying 61777373
+10:23:03 live instances: 0; outputs: 12711/12711; credit after: $3.99

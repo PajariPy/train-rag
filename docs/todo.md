@@ -12,15 +12,13 @@ kanban-plugin: board
 - [ ] [[Article - problems by metric and how to fix them]] #low
 - [ ] [[Article - future map]] #low
 - [ ] [[Approach human-style data problems]] #medium
-- [ ] [[Port to LangGraph and LangChain]] #medium
-- [ ] [[Training-set minors from review]] #low
-- [ ] [[Fine-tune other base embedders]] #low
 
 
 ## Next
 
-- [ ] [[Update the pipeline with the accepted experiments]] #high
+- [ ] [[Mine the corpus with the SLM]] #high
 - [ ] [[Rewrite the query from the chat history]] #high
+- [ ] [[Prepare the evaluation for the final run]] #high
 - [ ] [[Evaluate the full pipeline with clarifying questions]] #high
 - [ ] [[Detect out-of-scope questions]] #medium
 - [ ] [[Add guardrails]] #medium
@@ -28,12 +26,14 @@ kanban-plugin: board
 
 ## In progress
 
-- [ ] [[Train the Slack field extractor SLM]] #high
+- [ ] [[Port to LangGraph and LangChain]] #medium
 
 
 ## Done
 
 **Complete**
+- [x] [[Train the Slack field extractor SLM]] #high
+- [x] [[Update the pipeline with the accepted experiments]] #done
 - [x] [[Show the agent where its results disagree]] #done
 - [x] [[Plan evaluation for data without a benchmark]] #medium
 - [x] [[Test mined fields as search filters]] #high

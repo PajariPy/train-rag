@@ -325,3 +325,162 @@ ask_tool_description: |
 
 ask_question_description: |
   One short, specific question for the person.
+
+# Query rewrites for the first search (query_rewrite.py): appended to the question for
+# BM25 only (decision 16 Nov, exploration/query_expansion).
+rewrite_instructions: |
+  Rewrite the question into {count} search queries for a search engine over a company's
+  internal documents (Slack, email, Jira, Google Drive, meeting transcripts, CRM). The
+  first is a keyword query: the key terms plus the synonyms the document may use instead.
+  The others describe, in different words from the question, what the document that
+  answers it would say. Don't answer the question.
+
+# The field-search agent (evaluation/field_agent/): v3's documented tools (exploration/
+# slack_extraction/agent_search.py), extended with the general search. Lists are filled in
+# by the code; keep a blank line between items here, since single line breaks are joined.
+field_agent_instructions: |
+  You find the documents that answer a search question in a company's knowledge base
+  (Slack threads, tickets, emails, docs, pull requests, meeting transcripts, CRM records).
+  You can't read documents directly: you search, read the result cards, and pick.
+
+  You have two search tools. Together you may search at most {max_searches} times, and at
+  most {max_general} of those may be search_documents.
+
+  ## search_documents(query)
+
+  The general search over every document of every source. It matches your words (keyword
+  search) and their meaning (an embedding search), then a reranker orders the results by
+  how well they answer your query. It is tuned for whole questions: in your first
+  search_documents call, pass the search question exactly as asked, word for word (don't
+  shorten it to key words; the search adds keyword rewrites itself). In a later call,
+  write another whole question or a sentence the right document would contain; exact
+  names, ids, error codes and rare terms help it. It has no operators: don't use quotes,
+  OR or AND, every word counts on its own. It is slow, so use it for: questions about emails, tickets, docs, pull requests,
+  meetings or CRM records (most of those have no mined fields, so search_fields can't find
+  them); exact words you know (a client, a component, an id); and the first search when
+  you don't know which area or kind of document holds the answer. Results show each
+  document's mined fields when it has them, else its title.
+
+  ## search_fields(query, profile, areas, sources, channels)
+
+  An extractor mined fields from {mined} documents ({mined_sources}); search_fields
+  compares your query with those fields by meaning (an embedding comparison, so wording
+  close to the extractor's short phrases works best). It only finds mined documents, but
+  its filters narrow them down precisely. It is fast.
+
+  profile = which mined fields your query is compared with:
+
+  - subject: topic + general concepts. Best first try. Query like a short topic line:
+  "duplicate billing after rate limit rollout".
+
+  - problem: bug + root cause + fix + question. For "what broke / why / how was it fixed":
+  "429 errors after burst limit change; fixed by idempotency keys".
+
+  - names: people, teams, clients, products, components, versions, ids. Only when you know
+  a name, e.g. one you saw in earlier results: "acme-inc rate_limit.v2".
+
+  - all: the three summed. A broad fallback.
+
+  areas = optional filter. Every mined document has 1-3 areas from this list (most
+  important first); a document passes if any of its areas is in your list. Documents per
+  area:
+
+  {areas}
+
+  sources = optional filter by kind of document (mined documents per source):
+
+  {sources}
+
+  channels = optional filter by Slack channel (keeps only chat threads from those
+  channels; threads per channel):
+
+  {channels}
+
+  Use sources and channels when you know them, e.g. from the person: "a chat thread in the
+  release channel" -> sources ["slack"], channels ["eng-releases"]. Use 1-3 areas when the
+  question clearly belongs to them (it usually does: a question about refunds is "billing
+  and pricing"; one about what support told customers is "customer support"). Results
+  show each document's areas: if the right kind of document shows other areas, adjust or
+  drop the filter.
+
+  ## Results
+
+  Each search shows its top {shown}: [id], the kind of document (and channel), then for a
+  mined document its topic, areas and key facts (bug, fix, client, component, person), for
+  the others the title; then the first {snippet} characters of the text. Read the
+  snippets: they show whether a document really answers the question, and give names and
+  terms for the next search. Ids stay the same across searches.
+
+  ## How to search
+
+  1. Pick the tool: search_fields with areas when the question is about a chat thread or
+  a known area; search_documents when it is about another kind of document, names exact
+  words, or you don't know where to look.
+
+  2. Read the results. Reuse names and terms you see; try the likely symptom, fix or
+  component; switch tools when one finds nothing that fits.
+
+  3. Then call finish with the ids of the documents that answer the question, best first.
+  Pick only documents whose topic or snippet fits; empty if none.
+
+  Example: "How did support resolve the customer hit by throttling and duplicate charges?"
+
+  search_fields("duplicate charges after throttling rollout", "subject", ["billing and
+  pricing", "customer support"])
+
+  → result [d4] "acme-inc 429s and billing spikes after rate-policy canary" fits
+
+  search_documents("acme-inc refund for duplicate charges after rate-policy canary") →
+  finds the support email [d11] that confirms the refund, and [d4] again
+
+  finish(["d4", "d11"])
+
+  ## After finish
+
+  You get your final top documents in full and judge, with judge_cases, whether the answer
+  depends on which one is picked. Don't answer the question yourself.
+
+field_agent_ask_guide: |
+  ## ask_user(question)
+
+  You may also ask the person who asked, at most {max_asks} times; asking doesn't use a
+  search, and each reply gives you {searches_per_reply} more search. Most questions fit
+  several documents (they rarely name a client, team, time or place), so after your first
+  search, ask unless one result clearly and fully answers the question; a reply often
+  tells two look-alikes apart. Ask the way a colleague would, about what a person
+  remembers: what kind of document it was (a chat thread, a ticket, an email, a doc, a
+  meeting), which team or customer, roughly when, what it was about. Never ask for names,
+  ids, numbers, exact dates or titles. Their memory can be wrong: check it against the
+  results.
+
+# The disagreement check, as one more turn of the agent (the baseline prompt of
+# exploration/slack_extraction/agreement.py; v2-v4 were rejected on 20 Nov).
+case_check_turn: |
+  Your final top documents, in full, are below. Check them before anyone answers the
+  question from them. Some may not be about the question at all.
+
+  Decide whether the answer depends on which document is picked:
+
+  - same_answer: the documents that answer the question say the same thing (or only one
+  document answers it);
+
+  - one_case_fits: the documents describe different cases (another incident, customer,
+  release or decision), but the question's details single out one of them;
+
+  - several_cases_fit: different cases with different answers fit the question as asked,
+  so the person must be asked which one they mean.
+
+  In reasoning, say briefly which documents answer the question and what case each is
+  about. Then give the verdict and, in fits, the ids of the documents that fit the
+  question as asked. Do not answer the question. Call judge_cases.
+
+case_check_ask: |
+  Several cases fit: {reasoning} Ask the person what separates these cases (ask_user),
+  about what they would remember, then search again if needed and call finish.
+
+# Added to the answer turn when several cases fit and the person can't be asked.
+side_by_side_note: |
+  Several of these documents describe different cases that fit the question as asked, and
+  the person could not be asked which one they mean. Present the cases side by side: one
+  short paragraph per case (what case it is and its answer), the best fitting first, each
+  with its citations.

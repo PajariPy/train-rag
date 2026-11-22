@@ -217,3 +217,91 @@ mine every document once. Plan, made before any paid run:
 
 Mining the whole corpus afterwards: about 615M output tokens, ≈ $9–13 on one 4090 (21–30
 hours). DeepSeek on the same corpus would cost ≈ $500, and again after every schema change.
+
+## The training run (20–21 November)
+
+The plan held, with one lost attempt and a longer run than estimated.
+
+- **Labels.** DeepSeek labelled 1,998 of the 2,000 extra documents for $1.84, so the model
+  trained on 14,919 examples from every source.
+- **The first GPU was lost.** The ssh connection dropped while the machine was being set up.
+  The script read the flag for the fast attention kernels as empty and started on the slow
+  path, 68 seconds a step instead of 16, a 50-hour run. It was stopped and destroyed ($0.46),
+  and the scripts now put a time limit on every remote call and run long jobs detached.
+- **The run.** Two epochs, 1,866 steps, 9.6 hours on one RTX 4090 at $0.40 an hour. The plan
+  said 6.5 hours: the examples are longer than estimated (median 3,729 tokens). The training
+  loss fell from 0.46 to 0.14. The loss on 400 held-out documents fell from 0.247 to 0.171
+  and was flat for the last ~250 steps: the model isn't overfitting, and a third epoch
+  would add little.
+- **A first look.** At the end of training the model wrote the fields for 20 held-out
+  documents. All 20 were valid JSON, and the fields matched DeepSeek's with a mean word F1
+  of 0.78. Names are near perfect (person, client, region, model ≥ 0.99), and so are questions
+  0.90, products 0.89, topic and fix 0.84. The weak fields are the ones that ask for
+  judgement: decision 0.30, impact 0.40, action item 0.56. DeepSeek is least consistent on
+  those itself, and field search leans on topic, problem and names, not on them.
+- **Cost.** $1.84 for labels and $5.23 for GPUs, failed attempt included: **$7.07**, against
+  the plan's $6.50–7.
+
+Twenty documents only show the direction. The score that decides whether we mine the corpus
+comes from all 12,711 held-out documents, per source.
+
+## The held-out score (21 November)
+
+The model wrote the fields for every held-out document, 12,711 from all nine sources plus
+the questions, none of them seen in training. vLLM served the model merged into its
+weights, and one RTX 4090 took 80 minutes. The outputs were compared with DeepSeek's in two
+ways: word F1 (the words of a field's values, joined) and value F1 (each value as written).
+
+| Source | Documents | Valid JSON | Word F1 | Value F1 |
+|---|---:|---:|---:|---:|
+| Slack | 6,584 | 99.7% | 0.787 | 0.555 |
+| Google Drive | 1,706 | 98.9% | 0.767 | 0.574 |
+| Linear | 1,618 | 99.6% | 0.780 | 0.608 |
+| Gmail | 687 | 99.7% | 0.813 | 0.584 |
+| Confluence | 633 | 98.6% | 0.758 | 0.568 |
+| Jira | 495 | 99.8% | 0.785 | 0.595 |
+| GitHub | 293 | 99.7% | 0.792 | 0.572 |
+| Fireflies | 268 | 99.6% | 0.733 | 0.575 |
+| HubSpot | 227 | 98.7% | 0.779 | 0.623 |
+| **All** | **12,711** | **99.5%** | **0.785** | **0.571** |
+
+- **No source is left behind.** The thin sources, which got the extra labels, score like
+  Slack. Fireflies is lowest (long meeting transcripts, the most often cut).
+- **Names are copied as DeepSeek copies them:** person 0.98, client 0.90, region 0.88,
+  identifier 0.81 exact value F1. These are what field filters and the names profile use.
+- **Phrases agree in words, not in wording.** A topic matches DeepSeek's in words (0.75) but
+  rarely word for word (0.16); bug, cause and fix look the same. Field search embeds these
+  phrases, so the same words in another order still land close.
+- **Decision and impact stay weak** (0.55 and 0.59 word F1). They ask what counts as a
+  decision, and DeepSeek isn't consistent on that either.
+- Zero-shot GLiNER reached 0.41 exact value F1 against DeepSeek on 13 threads. The
+  fine-tuned 2B model reaches 0.57 on 12,711 documents of every kind.
+
+The whole fine-tuning cost **$7.84**: $1.84 for DeepSeek labels and $6.00 of GPU time, the
+lost first attempt and the scoring included. The plan's go criteria hold: almost every
+output parses, and names match. What remains before mining is the question that matters for
+search: does field search find the right documents as well with these fields as with
+DeepSeek's? Half B's candidates are among the held-out documents, so that test can run on
+the outputs we already have.
+
+## Fine-tuning works: field search with the SLM's fields (22 November)
+
+Agreeing with DeepSeek is not the goal; finding the right thread is. So the "Fields as a
+search" test ran again, twice on the same ground: half B's 100 dev questions, never trained
+on, and a pool of the 12,511 held-out documents. Once every question and document had
+DeepSeek's fields, once the SLM's. The same search (gte similarity of the subject, problem
+and names profiles), no agent and no reranker, so the extractor is the only difference.
+
+| Right thread in the top … (100 questions) | 10 | 50 | 100 | 300 | Median rank |
+|---|---:|---:|---:|---:|---:|
+| Field search, DeepSeek's fields | 38 | 68 | 80 | 96 | 19 |
+| **Field search, SLM's fields** | **38** | **66** | **80** | 90 | 23 |
+
+The fine-tuned 2B model gives the same search as DeepSeek down to the top 100, which is as
+deep as candidates go to the reranker. One question is one point here, so the 2-point gap at
+the top 50 is noise. It is a little weaker only deeper down (top 300: 90% against 96%). The
+phrases it writes differ from DeepSeek's in wording, but they embed to the same place, which
+is what field search uses.
+
+**The small model can stand in for DeepSeek**, at about $10 for the whole corpus instead of
+about $500.
