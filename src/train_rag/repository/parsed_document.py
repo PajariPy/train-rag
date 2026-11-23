@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 from sqlalchemy.dialects.postgresql import insert
-from sqlmodel import Session
+from sqlmodel import Session, col, select
 
 from train_rag.models.parsed import ParsedDocument
 from train_rag.tables import ParsedDocumentRecord
@@ -66,3 +66,24 @@ def upsert_parsed_documents(session: Session, documents: Sequence[ParsedDocument
         ),
         rows,
     )
+
+
+def slack_channels(session: Session, document_ids: Sequence[int]) -> dict[int, str]:
+    """Load the Slack channel of parsed documents.
+
+    Args:
+        session: Active database session.
+        document_ids: Document row ids; ones without a channel are left out.
+
+    Returns:
+        Channel names (without "#") keyed by document row id.
+    """
+    if not document_ids:
+        return {}
+
+    channel = col(ParsedDocumentRecord.data)["channel"].astext
+    statement = select(ParsedDocumentRecord.document_id, channel).where(
+        col(ParsedDocumentRecord.document_id).in_(document_ids), channel.is_not(None)
+    )
+
+    return {document_id: name.lstrip("#") for document_id, name in session.exec(statement) if name}

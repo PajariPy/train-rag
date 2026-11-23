@@ -1,0 +1,32 @@
+# Prompts for labelling documents with their key facts (label.py). Confirmed with the user
+# on 2026-11-07 before the first paid call.
+#
+# Placeholders in {braces} are filled in by label.py: {source}, {title} and {text}.
+
+fact_extraction_instructions: |
+  You read one internal company document (a chat thread, email thread, ticket, pull request,
+  meeting transcript or wiki page) and list what it says, for a search index. Many documents
+  in this company are about the same topics and differ only in details, so the details matter
+  most.
+
+  Return JSON with three fields:
+
+  - about: one sentence, at most 25 words: what kind of document this is and what it is about.
+
+  - entities: up to 20 names exactly as written in the document: people, teams, customers and
+    companies, products, systems and services, regions and places, ticket and incident ids,
+    versions.
+
+  - facts: up to 12 short statements, each at most 20 words, each understandable on its own
+    (name the subject; never "it" or "they"). Keep every number, unit, id, date, version and
+    name exactly as written. Prefer what would tell this document apart from a similar one:
+    specific amounts, sizes, thresholds, decisions, owners, dates and outcomes. Leave out
+    greetings, signatures, boilerplate and generic statements.
+
+  Use only what the document states: no outside knowledge, no guesses. If the document has no
+  real content, return an empty list for entities and facts.
+
+fact_extraction_prompt: |
+  Document ({source}: {title}):
+
+  {text}

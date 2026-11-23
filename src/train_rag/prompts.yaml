@@ -9,6 +9,9 @@
 #   {max_reads}: how many documents the snippet agent may read in full.
 #   {keyword_results}: how many results the snippet agent's keyword search shows.
 #   {max_semantic}, {max_keyword}: the keyword agent's separate search budgets.
+#   {question}, {gold_answer}, {document}: a benchmark question, its answer and its document.
+#   {note}: what the person behind a question remembers (a memory note).
+#   {max_asks}: how many questions the clarifying agent may ask the person.
 
 # Grades an answer against the benchmark's reference answer and facts (evaluation/judge.py).
 judge_instructions: |
@@ -19,9 +22,12 @@ judge_instructions: |
 
   1. correct: is the answer right? It is right when its main claim agrees with the
   reference answer and nothing in it contradicts the reference. Extra detail is fine
-  unless it is wrong. If the reference says the information is not available, the
-  answer is right only if it also says it cannot find the information, and wrong if it
-  makes something up. If the reference has an answer, saying the information is not
+  unless it is wrong. The answer may give a main answer and then briefly mention other,
+  similar cases from other documents, marked as different cases; it is right when its main
+  answer or one of those mentioned cases agrees with the reference, and the other mentioned
+  cases don't count as contradicting it. If the reference says the information is not
+  available, the answer is right only if it also says it cannot find the information, and
+  wrong if it makes something up. If the reference has an answer, saying the information is not
   available is wrong.
 
   2. facts_covered: for each numbered fact, in order, true if the answer states it
@@ -47,8 +53,20 @@ document_answer_instructions: |
   dates the documents state. If the documents do not contain the answer, reply exactly:
   {not_found}
 
+  Some documents are very similar: each answers the question fully or in part, but they
+  are about different cases (another customer, incident, release or decision) or give
+  different facts. Then don't pick one silently and don't mix their facts: give the
+  answer from the document that fits the question best as the main answer, then mention
+  the other ones briefly, in a sentence each: what case they are about and how their
+  answer differs, so the person can look at them too.
+
+  Cite your sources inline, always: after every sentence or list item that states a fact,
+  put the number of the document it comes from in brackets, like [2], or [2, 4] for
+  several. This includes each other case you mention. Cite only documents you were given.
+
   In cited_documents, list the numbers ([1], [2], ...) of the documents your answer is
-  taken from, only those, best source first. Leave it empty when you reply {not_found}.
+  taken from, only those, best source first (the main one, then the ones you mention).
+  Leave it empty when you reply {not_found}.
 
 # The agent: gets the question with the results of searching it, can search more, then
 # answers (evaluation/agent.py).
@@ -74,6 +92,13 @@ agent_instructions: |
   Answer only from documents you were given or found. Be specific and complete: give the
   names, numbers and dates the documents state. If the documents do not contain the
   answer, reply exactly: {not_found}
+
+  Some documents are very similar: each answers the question fully or in part, but they
+  are about different cases (another customer, incident, release or decision) or give
+  different facts. Then don't pick one silently and don't mix their facts: give the
+  answer from the document that fits the question best as the main answer, then mention
+  the other ones briefly, in a sentence each: what case they are about and how their
+  answer differs, so the person can look at them too.
 
 # The agent's first message: the question and the documents found for it.
 agent_first_turn: |
@@ -144,6 +169,13 @@ snippet_agent_instructions: |
   dates the documents state. If the documents do not contain the answer, reply exactly:
   {not_found}
 
+  Some documents are very similar: each answers the question fully or in part, but they
+  are about different cases (another customer, incident, release or decision) or give
+  different facts. Then don't pick one silently and don't mix their facts: give the
+  answer from the document that fits the question best as the main answer, then mention
+  the other ones briefly, in a sentence each: what case they are about and how their
+  answer differs, so the person can look at them too.
+
 # The keyword agent (evaluation/agent_keywords.py): the snippet agent's tools, with few
 # general searches and many cheap keyword searches, and the advice to paraphrase.
 keyword_agent_instructions: |
@@ -193,6 +225,13 @@ keyword_agent_instructions: |
   names, numbers and dates the documents state. If, after searching, no document matches
   every detail of the question, reply exactly: {not_found}
 
+  Some documents are very similar: each answers the question fully or in part, but they
+  are about different cases (another customer, incident, release or decision) or give
+  different facts. Then don't pick one silently and don't mix their facts: give the
+  answer from the document that fits the question best as the main answer, then mention
+  the other ones briefly, in a sentence each: what case they are about and how their
+  answer differs, so the person can look at them too.
+
 keyword_snippet_tool_description: |
   Find the company's internal documents that contain the given words (BM25 keyword
   matching). Shows the best matches, each with its id and the lines holding the words,
@@ -203,3 +242,245 @@ read_tool_description: |
 
 read_id_description: |
   The document's id, exactly as a search result showed it after "id:".
+
+# Writes what the person behind a question remembers about its document
+# (evaluation/memory_notes.py). Used for the evaluation with clarifying questions.
+memory_note_instructions: |
+  You write what an employee remembers about a company document they are trying to find
+  again. People remember the big picture and the idea, rarely the exact details.
+
+  Write at most 2 short bullet points, in the employee's own casual words, each starting
+  with "- ":
+
+  - First: what kind of document it was or where it lived (a pull request, a ticket, a
+  chat thread, an email, a meeting, a shared doc, a CRM record), roughly who was involved
+  (a team or role) and roughly when.
+
+  - Second: what it was about, in one plain sentence, no deeper than the question already
+  says. Don't add mechanisms, causes, settings, how it was solved, or anything from the
+  discussion or comments: the employee doesn't remember those.
+
+  Never include: the document's title or ids, product, project or code names that would
+  work as search keywords, numbers, exact dates, names of people, or the answer to the
+  question. Describe things in everyday words instead.
+
+  Reply as JSON with two fields: "note" (the bullet points as one text) and
+  "wrong_detail" (null, unless told to include a wrong detail).
+
+memory_note_clean: |
+  Every point must be true to the document.
+
+memory_note_wrong: |
+  Exactly one point must be slightly wrong, the way memory mixes things up: a neighbouring
+  team, a similar kind of document or place (a ticket instead of a pull request, email
+  instead of chat), or a nearby time. Keep it plausible and close to the truth; never
+  invent something unrelated. Say it as confidently as the true points. In "wrong_detail",
+  describe in one short sentence what is wrong and what the truth is.
+
+memory_note_turn: |
+  The employee's question: {question}
+
+  Its answer (never put it in the note): {gold_answer}
+
+  {instruction}
+
+  The document:
+
+  {document}
+
+# Plays the employee who asked a question, answering the clarifying agent
+# (evaluation/person.py).
+person_instructions: |
+  You are an employee who asked a company assistant this question: {question}
+
+  All you remember about the document you are looking for is this:
+
+  {note}
+
+  The assistant may ask you about it. Answer like a busy person in chat: one short, casual
+  sentence. Answer only what was asked, from what you remember above. If you don't remember
+  something, say you don't remember; never guess or make anything up. Say everything you
+  remember with the same confidence.
+
+# The clarifying agent (evaluation/agent_clarify.py): the snippet agent, plus asking the
+# person who asked the question.
+clarify_agent_instructions: |
+  {snippet_instructions}
+
+  You can also ask the person who asked the question, with ask_user, at most {max_asks}
+  times. Each answered question gives you 2 more searches, so you can act on the reply.
+
+  Ask early: if the documents you were given don't clearly answer the question, ask once
+  before searching further, so your searches can use what they tell you. Ask the way a
+  colleague would, about what a person remembers: what kind of document it was (a ticket,
+  a pull request, a chat thread, an email, a meeting, a shared doc, a CRM record), which
+  team was involved, roughly when, and what it was about. Never ask for names, ids,
+  numbers, exact dates or titles: people don't remember those. Their memory can also be
+  wrong, so check what they say against the documents. Before replying that you could not
+  find the answer, ask if you still have questions left.
+
+ask_tool_description: |
+  Ask the person who asked the question one short clarifying question, and get their
+  reply.
+
+ask_question_description: |
+  One short, specific question for the person.
+
+# Query rewrites for the first search (query_rewrite.py): appended to the question for
+# BM25 only (decision 16 Nov, exploration/query_expansion).
+rewrite_instructions: |
+  Rewrite the question into {count} search queries for a search engine over a company's
+  internal documents (Slack, email, Jira, Google Drive, meeting transcripts, CRM). The
+  first is a keyword query: the key terms plus the synonyms the document may use instead.
+  The others describe, in different words from the question, what the document that
+  answers it would say. Don't answer the question.
+
+# The field-search agent (evaluation/field_agent/): v3's documented tools (exploration/
+# slack_extraction/agent_search.py), extended with the general search. Lists are filled in
+# by the code; keep a blank line between items here, since single line breaks are joined.
+field_agent_instructions: |
+  You find the documents that answer a search question in a company's knowledge base
+  (Slack threads, tickets, emails, docs, pull requests, meeting transcripts, CRM records).
+  You can't read documents directly: you search, read the result cards, and pick.
+
+  You have two search tools. Together you may search at most {max_searches} times, and at
+  most {max_general} of those may be search_documents.
+
+  ## search_documents(query)
+
+  The general search over every document of every source. It matches your words (keyword
+  search) and their meaning (an embedding search), then a reranker orders the results by
+  how well they answer your query. It is tuned for whole questions: in your first
+  search_documents call, pass the search question exactly as asked, word for word (don't
+  shorten it to key words; the search adds keyword rewrites itself). In a later call,
+  write another whole question or a sentence the right document would contain; exact
+  names, ids, error codes and rare terms help it. It has no operators: don't use quotes,
+  OR or AND, every word counts on its own. It is slow, so use it for: questions about emails, tickets, docs, pull requests,
+  meetings or CRM records (most of those have no mined fields, so search_fields can't find
+  them); exact words you know (a client, a component, an id); and the first search when
+  you don't know which area or kind of document holds the answer. Results show each
+  document's mined fields when it has them, else its title.
+
+  ## search_fields(query, profile, areas, sources, channels)
+
+  An extractor mined fields from {mined} documents ({mined_sources}); search_fields
+  compares your query with those fields by meaning (an embedding comparison, so wording
+  close to the extractor's short phrases works best). It only finds mined documents, but
+  its filters narrow them down precisely. It is fast.
+
+  profile = which mined fields your query is compared with:
+
+  - subject: topic + general concepts. Best first try. Query like a short topic line:
+  "duplicate billing after rate limit rollout".
+
+  - problem: bug + root cause + fix + question. For "what broke / why / how was it fixed":
+  "429 errors after burst limit change; fixed by idempotency keys".
+
+  - names: people, teams, clients, products, components, versions, ids. Only when you know
+  a name, e.g. one you saw in earlier results: "acme-inc rate_limit.v2".
+
+  - all: the three summed. A broad fallback.
+
+  areas = optional filter. Every mined document has 1-3 areas from this list (most
+  important first); a document passes if any of its areas is in your list. Documents per
+  area:
+
+  {areas}
+
+  sources = optional filter by kind of document (mined documents per source):
+
+  {sources}
+
+  channels = optional filter by Slack channel (keeps only chat threads from those
+  channels; threads per channel):
+
+  {channels}
+
+  Use sources and channels when you know them, e.g. from the person: "a chat thread in the
+  release channel" -> sources ["slack"], channels ["eng-releases"]. Use 1-3 areas when the
+  question clearly belongs to them (it usually does: a question about refunds is "billing
+  and pricing"; one about what support told customers is "customer support"). Results
+  show each document's areas: if the right kind of document shows other areas, adjust or
+  drop the filter.
+
+  ## Results
+
+  Each search shows its top {shown}: [id], the kind of document (and channel), then for a
+  mined document its topic, areas and key facts (bug, fix, client, component, person), for
+  the others the title; then the first {snippet} characters of the text. Read the
+  snippets: they show whether a document really answers the question, and give names and
+  terms for the next search. Ids stay the same across searches.
+
+  ## How to search
+
+  1. Pick the tool: search_fields with areas when the question is about a chat thread or
+  a known area; search_documents when it is about another kind of document, names exact
+  words, or you don't know where to look.
+
+  2. Read the results. Reuse names and terms you see; try the likely symptom, fix or
+  component; switch tools when one finds nothing that fits.
+
+  3. Then call finish with the ids of the documents that answer the question, best first.
+  Pick only documents whose topic or snippet fits; empty if none.
+
+  Example: "How did support resolve the customer hit by throttling and duplicate charges?"
+
+  search_fields("duplicate charges after throttling rollout", "subject", ["billing and
+  pricing", "customer support"])
+
+  → result [d4] "acme-inc 429s and billing spikes after rate-policy canary" fits
+
+  search_documents("acme-inc refund for duplicate charges after rate-policy canary") →
+  finds the support email [d11] that confirms the refund, and [d4] again
+
+  finish(["d4", "d11"])
+
+  ## After finish
+
+  You get your final top documents in full and judge, with judge_cases, whether the answer
+  depends on which one is picked. Don't answer the question yourself.
+
+field_agent_ask_guide: |
+  ## ask_user(question)
+
+  You may also ask the person who asked, at most {max_asks} times; asking doesn't use a
+  search, and each reply gives you {searches_per_reply} more search. Most questions fit
+  several documents (they rarely name a client, team, time or place), so after your first
+  search, ask unless one result clearly and fully answers the question; a reply often
+  tells two look-alikes apart. Ask the way a colleague would, about what a person
+  remembers: what kind of document it was (a chat thread, a ticket, an email, a doc, a
+  meeting), which team or customer, roughly when, what it was about. Never ask for names,
+  ids, numbers, exact dates or titles. Their memory can be wrong: check it against the
+  results.
+
+# The disagreement check, as one more turn of the agent (the baseline prompt of
+# exploration/slack_extraction/agreement.py; v2-v4 were rejected on 20 Nov).
+case_check_turn: |
+  Your final top documents, in full, are below. Check them before anyone answers the
+  question from them. Some may not be about the question at all.
+
+  Decide whether the answer depends on which document is picked:
+
+  - same_answer: the documents that answer the question say the same thing (or only one
+  document answers it);
+
+  - one_case_fits: the documents describe different cases (another incident, customer,
+  release or decision), but the question's details single out one of them;
+
+  - several_cases_fit: different cases with different answers fit the question as asked,
+  so the person must be asked which one they mean.
+
+  In reasoning, say briefly which documents answer the question and what case each is
+  about. Then give the verdict and, in fits, the ids of the documents that fit the
+  question as asked. Do not answer the question. Call judge_cases.
+
+case_check_ask: |
+  Several cases fit: {reasoning} Ask the person what separates these cases (ask_user),
+  about what they would remember, then search again if needed and call finish.
+
+# Added to the answer turn when several cases fit and the person can't be asked.
+side_by_side_note: |
+  Several of these documents describe different cases that fit the question as asked, and
+  the person could not be asked which one they mean. Present the cases side by side: one
+  short paragraph per case (what case it is and its answer), the best fitting first, each
+  with its citations.

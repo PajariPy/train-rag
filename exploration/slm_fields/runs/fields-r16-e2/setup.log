@@ -1,0 +1,74 @@
+downloading uv 0.13.9 x86_64-unknown-linux-gnu
+installing to /root/.local/bin
+  uv
+  uvx
+everything's installed!
+
+To add $HOME/.local/bin to your PATH, either restart your shell or run:
+
+    source $HOME/.local/bin/env (sh, bash, zsh)
+    source $HOME/.local/bin/env.fish (fish)
+WARN: The following commands are shadowed by other commands in your PATH: uv uvx
+Downloading cpython-3.13.18-linux-x86_64-gnu (download) (33.9MiB)
+ Downloaded cpython-3.13.18-linux-x86_64-gnu (download)
+   Updating https://github.com/huggingface/transformers (HEAD)
+    Updated https://github.com/huggingface/transformers (4d9ef623e3b0a1fb6c12891a907e0e50d41f0af8)
+   Building transformers @ git+https://github.com/huggingface/transformers@4d9ef623e3b0a1fb6c12891a907e0e50d41f0af8
+Downloading networkx (2.0MiB)
+Downloading pydantic-core (2.2MiB)
+Downloading sympy (6.0MiB)
+Downloading nvidia-nccl-cu13 (206.0MiB)
+Downloading triton (272.4MiB)
+Downloading numpy (15.0MiB)
+Downloading pygments (1.2MiB)
+Downloading pillow (6.8MiB)
+Downloading hf-xet (4.1MiB)
+Downloading nvidia-nvjitlink (44.5MiB)
+Downloading nvidia-cuda-runtime (2.2MiB)
+Downloading cuda-bindings (8.0MiB)
+Downloading nvidia-cufft (208.1MiB)
+Downloading tokenizers (3.2MiB)
+Downloading torch (514.2MiB)
+Downloading nvidia-cuda-nvrtc (44.8MiB)
+Downloading nvidia-cusolver (217.4MiB)
+Downloading nvidia-cufile (1.3MiB)
+Downloading nvidia-cusparse (144.0MiB)
+Downloading nvidia-cudnn-cu13 (495.1MiB)
+Downloading nvidia-cublas (386.1MiB)
+Downloading nvidia-cuda-cupti (11.4MiB)
+Downloading nvidia-cuda-cccl (3.9MiB)
+Downloading torchvision (7.2MiB)
+Downloading nvidia-cusparselt-cu13 (162.3MiB)
+Downloading nvidia-nvshmem-cu13 (129.1MiB)
+ Downloaded pygments
+ Downloaded nvidia-cufile
+ Downloaded networkx
+ Downloaded nvidia-cuda-runtime
+ Downloaded pydantic-core
+ Downloaded tokenizers
+ Downloaded nvidia-cuda-cccl
+ Downloaded hf-xet
+ Downloaded sympy
+ Downloaded pillow
+ Downloaded torchvision
+ Downloaded cuda-bindings
+ Downloaded nvidia-cuda-cupti
+ Downloaded numpy
+      Built transformers @ git+https://github.com/huggingface/transformers@4d9ef623e3b0a1fb6c12891a907e0e50d41f0af8
+ Downloaded nvidia-nvjitlink
+ Downloaded nvidia-cuda-nvrtc
+ Downloaded nvidia-nvshmem-cu13
+ Downloaded nvidia-cusparse
+ Downloaded nvidia-cusparselt-cu13
+ Downloaded nvidia-nccl-cu13
+ Downloaded nvidia-cufft
+ Downloaded nvidia-cusolver
+ Downloaded triton
+ Downloaded nvidia-cublas
+ Downloaded nvidia-cudnn-cu13
+ Downloaded torch
+Installed 62 packages in 2.88s
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/617 [00:00<?, ?it/s]Loading weights:  54%|█████▍    | 332/617 [00:00<00:00, 3319.09it/s]Loading weights: 100%|██████████| 617/617 [00:00<00:00, 4020.79it/s]
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|██████████| 1/1 [00:03<00:00,  3.43s/it]Writing model shards: 100%|██████████| 1/1 [00:03<00:00,  3.43s/it]
+merged into merged

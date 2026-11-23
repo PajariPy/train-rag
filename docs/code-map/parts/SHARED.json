@@ -1,0 +1,72 @@
+{
+  "id": "SHARED",
+  "kind": "module",
+  "label": "Shared helpers",
+  "summary": "Two small helpers: the central prompt store and the seeded benchmark sample.",
+  "children": [
+    {
+      "id": "SHARED.G1",
+      "kind": "group",
+      "label": "Files",
+      "summary": "The two helper files: prompt store and corpus sampler.",
+      "children": [
+        {
+          "id": "SHARED.G1.F1",
+          "kind": "file",
+          "label": "prompts.py",
+          "summary": "load_prompts() reads prompts.yaml once; prompt(name, **values) fills placeholders.",
+          "path": "src/train_rag/prompts.py",
+          "children": [
+            {
+              "id": "SHARED.G1.F1.N1",
+              "kind": "note",
+              "note_kind": "why",
+              "label": "One prompt file",
+              "summary": "All LLM prompts live in prompts.yaml; wrapped lines are joined so the file reads well.",
+              "details": "Keeping every prompt in `prompts.yaml` lets you edit and compare wording without touching Python. Long prompts are wrapped in the YAML for readability; `load_prompts` joins those wrapped lines back into single paragraphs (blank lines stay as breaks), so the model sees clean text."
+            },
+            {
+              "id": "SHARED.G1.F1.N2",
+              "kind": "note",
+              "note_kind": "pattern",
+              "label": "Cached loader",
+              "summary": "@cache on load_prompts parses the YAML once; str.format fills placeholders and raises KeyError if missing.",
+              "details": "`@cache` on `load_prompts` means the YAML is parsed once per process. `prompt()` uses `str.format`, so a missing placeholder value raises `KeyError` at call time, which surfaces typos early since most callers fill prompts at module import."
+            }
+          ],
+          "details": "`load_prompts()` is `@cache`d: it reads `prompts.yaml` once and collapses single newlines into spaces with the `WRAPPED_LINE` regex, keeping blank lines as paragraph breaks.\n\n`prompt(name, **values)` looks up a prompt and fills `{placeholders}` with `str.format`; a missing name or value raises `KeyError`. Callers typically fill them at import time, e.g. `prompt(\"document_answer_instructions\", not_found=NOT_FOUND_ANSWER)`.",
+          "symbols": [
+            "prompt",
+            "load_prompts",
+            "WRAPPED_LINE",
+            "PROMPTS_FILE"
+          ]
+        },
+        {
+          "id": "SHARED.G1.F2",
+          "kind": "file",
+          "label": "sampling.py",
+          "summary": "sample_documents() picks all cited documents plus seeded random distractors.",
+          "path": "src/train_rag/sampling.py",
+          "children": [
+            {
+              "id": "SHARED.G1.F2.N1",
+              "kind": "note",
+              "note_kind": "why",
+              "label": "Fixed seed",
+              "summary": "A constant seed gives the same corpus every run, so retrieval methods compare on equal ground.",
+              "details": "`SAMPLE_SEED = \"chunk-sample\"` is passed to `sample_document_ids`, so the same distractors are chosen on every run. Every retrieval method indexed on the sample then searches the same corpus and their recall is comparable (see the docstring of `sample_documents`)."
+            }
+          ],
+          "details": "`sample_documents(session, dataset, distractors)` returns a set of document row ids. It collects `expected_doc_ids` from every question via `load_questions`, maps them to row ids with `ids_of_doc_ids`, and unions them with `sample_document_ids(..., distractors, SAMPLE_SEED)`.\n\nCited documents guarantee every question stays answerable; distractors make retrieval non-trivial. The constant `SAMPLE_SEED = \"chunk-sample\"` makes the pick deterministic.",
+          "symbols": [
+            "sample_documents",
+            "SAMPLE_SEED"
+          ]
+        }
+      ],
+      "details": "Both files are tiny, stateless and have no CLI. They depend only on `prompts.yaml` and the repository layer, so any module can import them without cycles."
+    }
+  ],
+  "details": "Cross-cutting helpers imported by the evaluation and indexing code rather than a pipeline of their own.\n\n- `prompts.py` serves every LLM prompt from `prompts.yaml` (judge, answer, agent and tool descriptions), used by `evaluation/judge.py`, `agent.py`, `pipeline_answer.py` and `summary_search.py`.\n- `sampling.py` builds the small test corpus: all documents cited by benchmark questions plus a fixed number of seeded random distractors. It is called by `index_bm25.py` and `pipelines/data_ingestion.py` when a `sample` size is given.\n\nRead `prompts.py` first (30 lines), then `sampling.py`."
+}

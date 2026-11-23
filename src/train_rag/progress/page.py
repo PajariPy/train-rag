@@ -9,13 +9,18 @@ from sqlmodel import Session
 
 from train_rag.database import create_tables, get_engine
 from train_rag.models.pipeline_run import RunState
+from train_rag.models.workflow import WorkflowState
 from train_rag.repository.pipeline_run import latest_run_state
+from train_rag.repository.workflow import latest_workflow_state
 
 PAGE = Path(__file__).with_name("page.html")
 
 
 def create_app() -> FastAPI:
-    """Build the app: the page at `/`, the latest run's state at `/api/progress`.
+    """Build the app: the page, and the latest run and workflow as JSON.
+
+    The page is at `/`, the latest run at `/api/progress` and the latest workflow's
+    steps at `/api/workflow`.
 
     Returns:
         The FastAPI app.
@@ -34,6 +39,12 @@ def create_app() -> FastAPI:
         """Describe the latest run, or None when no run was recorded."""
         with Session(engine) as session:
             return latest_run_state(session)
+
+    @app.get("/api/workflow")
+    def workflow() -> WorkflowState | None:
+        """Describe the latest workflow and its steps, or None when there is none."""
+        with Session(engine) as session:
+            return latest_workflow_state(session)
 
     return app
 

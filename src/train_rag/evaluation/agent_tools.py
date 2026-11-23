@@ -9,6 +9,7 @@ from train_rag.prompts import prompt
 SEARCH_TOOL = "search_knowledge_base"
 KEYWORD_TOOL = "keyword_search"
 READ_TOOL = "read_document"
+ASK_TOOL = "ask_user"
 
 
 def search_function(
@@ -89,6 +90,32 @@ def snippet_tools() -> types.Tool:
                         )
                     },
                     required=["doc_id"],
+                ),
+            ),
+        ]
+    )
+
+
+def clarify_tools() -> types.Tool:
+    """Describe the clarifying agent's tools: the snippet agent's, plus asking the person.
+
+    Returns:
+        The snippet agent's three tools and `ask_user`, which takes one question.
+    """
+    return types.Tool(
+        function_declarations=[
+            *(snippet_tools().function_declarations or []),
+            types.FunctionDeclaration(
+                name=ASK_TOOL,
+                description=prompt("ask_tool_description"),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "question": types.Schema(
+                            type=types.Type.STRING, description=prompt("ask_question_description")
+                        )
+                    },
+                    required=["question"],
                 ),
             ),
         ]

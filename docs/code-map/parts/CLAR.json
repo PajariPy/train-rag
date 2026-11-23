@@ -1,0 +1,176 @@
+{
+  "id": "CLAR",
+  "kind": "module",
+  "label": "Clarifying questions",
+  "summary": "Lets the snippet agent ask a simulated person up to 3 questions, then scores it against zero-shot.",
+  "command": "train-rag write-memories --question-ids FILE | train-rag evaluate --system agent-snippets-clarify --question-ids FILE | train-rag clarify-report --run N --baseline M --question-ids FILE",
+  "details": "Measures accuracy with clarification: 46 semantic questions fail because search cannot single out the right document among near-duplicates, so the agent may ask the person behind the question, played by Gemini.\n\nFlow:\n- `write-memories` (`clarify.write_memories`) loads each question's right document and has Gemini write a short memory note (`memory_notes.write_note`), about a quarter with one wrong detail; notes are stored one by one in Postgres.\n- `evaluate --system agent-snippets-clarify --question-ids FILE` builds a `SimulatedPerson` per question from its note and runs `ClarifyingSnippetAgent.answer_with`; it refuses to start if a note is missing.\n- `clarify-report` (`clarify.report_clarification`) compares a run to a zero-shot baseline, split by clean notes and wrong-detail notes, and counts asks from the trace.\n\nData comes from the evaluation, repository and processing modules; start reading at `agent_clarify.py`, then `person.py`.",
+  "children": [
+    {
+      "id": "CLAR.B",
+      "kind": "base",
+      "label": "ClarifyingSnippetAgent",
+      "summary": "Snippet agent plus an ask_user tool with its own budget of 3 questions.",
+      "details": "Contract: a `ClarifyingSystem` (from `evaluation/system.py`) implements `answer_with(question, person)`; here it reuses `SnippetAgentSystem`'s loop and only overrides `tools`, `can_call` and `run_tool`.\n\n- `ask_user` calls go to `person.reply`, never touching search budgets, except each answered ask grants `SEARCHES_PER_REPLY = 2` extra searches so the agent can act on the reply.\n- `MAX_ASKS = 3` per question; `MAX_REFUSED = 2` refused tool calls end the loop so a model can not spin on used-up tools.\n- The agent sees only the person's replies, never the note or gold answer.\n\nA new clarifying system must subclass `ClarifyingSystem` and accept a `Person`.",
+      "symbols": [
+        "ClarifyingSnippetAgent",
+        "ClarifyingSnippetAgent.answer_with",
+        "ClarifyBudget",
+        "ClarifyingSnippetAgent.call"
+      ],
+      "children": [
+        {
+          "id": "CLAR.B.F1",
+          "kind": "file",
+          "label": "evaluation/agent_clarify.py",
+          "summary": "ClarifyingSnippetAgent and ClarifyBudget.",
+          "path": "src/train_rag/evaluation/agent_clarify.py",
+          "symbols": [
+            "ClarifyingSnippetAgent",
+            "ClarifyBudget"
+          ]
+        },
+        {
+          "id": "CLAR.B.N1",
+          "kind": "note",
+          "label": "Extension by subclass override",
+          "summary": "Reuses the snippet agent's loop; only call/can_call/tools change.",
+          "details": "`ClarifyingSnippetAgent(SnippetAgentSystem, ClarifyingSystem)` overrides `tools()` to return `clarify_tools()`, `can_call` to keep going while asks are left, and `run_tool` to count refused calls. `call` intercepts `ASK_TOOL` and delegates every other tool to `super().run_tool`. `ClarifyBudget` extends the shared `Budget` dataclass with person, asks and refused, so the base loop needs no change.",
+          "note_kind": "pattern"
+        }
+      ]
+    },
+    {
+      "id": "CLAR.G1",
+      "kind": "group",
+      "label": "Files",
+      "summary": "Person, note writing, report and the two commands.",
+      "details": "The pieces around the agent: the simulated person, the note writer and its checks, the report and the CLI entry functions.",
+      "children": [
+        {
+          "id": "CLAR.G1.F1",
+          "kind": "file",
+          "label": "clarify.py",
+          "summary": "write_memories and report_clarification, the two CLI commands.",
+          "path": "src/train_rag/clarify.py",
+          "details": "`write_memories` picks wrong-detail questions with `pick_wrong` over the whole id list, writes notes with Gemini, saves each at once via `upsert_memories`, and prints them for review with LEAK? and NUMBER? markers. `--redo` rewrites a subset and keeps each note's clean-or-wrong choice. `report_clarification` loads two runs' results and prints `clarify_report`.",
+          "symbols": [
+            "write_memories",
+            "report_clarification",
+            "right_documents"
+          ]
+        },
+        {
+          "id": "CLAR.G1.F2",
+          "kind": "file",
+          "label": "person.py",
+          "summary": "Person protocol and SimulatedPerson (Gemini that knows only the note).",
+          "path": "src/train_rag/evaluation/person.py",
+          "details": "`SimulatedPerson` builds its system prompt from the question and note, keeps the exchange history so later asks are consistent, uses low thinking, and falls back to \"I don't remember.\" on empty output.",
+          "symbols": [
+            "Person",
+            "SimulatedPerson.reply"
+          ]
+        },
+        {
+          "id": "CLAR.G1.F3",
+          "kind": "file",
+          "label": "memory_notes.py",
+          "summary": "Note writer, wrong-detail picker and leak checks.",
+          "path": "src/train_rag/evaluation/memory_notes.py",
+          "details": "`pick_wrong` samples 25% of sorted ids with seed 7. `write_note` asks Gemini for a JSON `NoteDraft` and raises if a wrong note has no `wrong_detail`. `leaks_title` flags two consecutive title words of 4+ chars; `has_number` flags digits. `write_each` saves per item and collects failures.",
+          "symbols": [
+            "write_note",
+            "pick_wrong",
+            "leaks_title",
+            "has_number",
+            "write_each"
+          ]
+        },
+        {
+          "id": "CLAR.G1.F4",
+          "kind": "file",
+          "label": "clarify_report.py",
+          "summary": "Markdown report and id-file helpers.",
+          "path": "src/train_rag/evaluation/clarify_report.py",
+          "details": "`clarify_report` builds a table of zero-shot, with-clarification, clean-note and wrong-detail accuracy plus ask counts; `count_asks` counts `ask_user` steps in a trace; `read_question_ids` skips blanks and # comments; `missing_memories` guards the run.",
+          "symbols": [
+            "clarify_report",
+            "count_asks",
+            "read_question_ids",
+            "missing_memories"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CLAR.G2",
+      "kind": "group",
+      "label": "Also uses",
+      "summary": "Memory note model, table and repository.",
+      "details": "Storage of the notes: a pydantic model, a SQLModel table and load/upsert functions.",
+      "children": [
+        {
+          "id": "CLAR.G2.U1",
+          "kind": "file",
+          "label": "models/memory.py",
+          "summary": "MemoryNote with a clean property.",
+          "path": "src/train_rag/models/memory.py",
+          "symbols": [
+            "MemoryNote"
+          ],
+          "side": true
+        },
+        {
+          "id": "CLAR.G2.U2",
+          "kind": "file",
+          "label": "repository/question_memory.py",
+          "summary": "load_memories and upsert_memories.",
+          "path": "src/train_rag/repository/question_memory.py",
+          "symbols": [
+            "load_memories",
+            "upsert_memories"
+          ],
+          "side": true
+        },
+        {
+          "id": "CLAR.G2.U3",
+          "kind": "file",
+          "label": "tables/question_memory.py",
+          "summary": "QuestionMemoryRecord table with model and prompt version.",
+          "path": "src/train_rag/tables/question_memory.py",
+          "symbols": [
+            "QuestionMemoryRecord"
+          ],
+          "side": true
+        }
+      ]
+    },
+    {
+      "id": "CLAR.N1",
+      "kind": "note",
+      "label": "Misremembered details and anti-leak checks",
+      "summary": "Notes avoid answers and hold a labelled wrong detail 25% of the time.",
+      "details": "The design lists anti-goals: notes that give the answer away (titles, ids, numbers, dates) would only measure leakage, and a person who over-answers is unrealistic. Hence the prompt forbids them and `leaks_title` and `has_number` flag violations for human review. About a quarter of notes carry one plausible wrong detail (e.g. Jira vs Linear), always labelled in `wrong_detail` so the report can split accuracy by clean and wrong notes.",
+      "note_kind": "why",
+      "doc": "docs/superpowers/specs/2026-11-09-clarification-eval-design.md"
+    },
+    {
+      "id": "CLAR.N2",
+      "kind": "note",
+      "label": "Person sees only the note",
+      "summary": "The agent sees replies only; the person sees note, not document or answer.",
+      "details": "`SimulatedPerson` is given the question and note only, so replies can not hold more than the note does; the agent only sees replies. `evaluate` aborts before any paid call if a question has no note (`missing_memories`).",
+      "note_kind": "why",
+      "doc": "docs/superpowers/plans/2026-11-09-clarification-eval.md"
+    },
+    {
+      "id": "CLAR.N3",
+      "kind": "note",
+      "label": "Per-item saving and review printing",
+      "summary": "Each note is saved as written so a failure loses nothing.",
+      "details": "`write_each` and the `save` closure commit every note at once; failures are collected and reported with a ready `--redo` command line. Fits the project's long-run habit of progress tracking via `RunProgress`.",
+      "note_kind": "style"
+    }
+  ]
+}

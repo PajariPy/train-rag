@@ -10,7 +10,10 @@ For one query:
 4. Fuse the two rankings with reciprocal rank fusion.
 5. Load the title and best chunk text of each fused document.
 6. Rerank: a cross-encoder reads the query with each of the top `RERANK_DEPTH` fused
-   documents and orders them by its score.
+   documents (or, with `union`, every document either search found) and orders them by
+   its score.
+
+BM25 may search another text: the question with Gemini's rewrites (`query_rewrite.py`).
 
 The pipeline is async, so several queries can run at once on one loaded model and index.
 """
@@ -29,12 +32,13 @@ from train_rag.index_bm25 import bm25_index_dir
 from train_rag.models import SourceType
 from train_rag.models.retrieval import RetrievedDocument, SearchHit
 from train_rag.pipelines.data_ingestion import FIELD
+from train_rag.pipelines.describe import describe_documents
 from train_rag.processing.normalize import normalize_text
 from train_rag.repository.embedding import embedded_sources
-from train_rag.repository.search import chunk_texts, document_titles, nearest_chunks
-from train_rag.reranker import GteModernBertReranker, Reranker
+from train_rag.repository.search import nearest_chunks
+from train_rag.reranker import FULL_TOKENS, GteModernBertReranker, Reranker
 from train_rag.retrieval import CHUNKS_PER_DOCUMENT, Bm25Retriever
-from train_rag.tables import EMBEDDING_TABLES
+from train_rag.tables import tables_for
 
 # Documents taken from each ranking into the fusion.
 CANDIDATES = 50
@@ -55,6 +59,7 @@ class RetrievalPipeline:
         bm25: Bm25Retriever,
         sources: list[SourceType],
         reranker: Reranker | None = None,
+        union: bool = False,
     ) -> None:
         """Keep the loaded model and index for every query.
 
@@ -65,44 +70,66 @@ class RetrievalPipeline:
             sources: Sources with chunks from the embedder.
             reranker: Cross-encoder that reorders the fused documents, or None to keep
                 the fusion's order.
+            union: Rerank every document either search found (about 97) instead of the
+                fused top `RERANK_DEPTH`.
         """
         self.engine = engine
         self.embedder = embedder
         self.bm25 = bm25
         self.sources = sources
         self.reranker = reranker
-        self.tables = EMBEDDING_TABLES[embedder.dimensions]
+        self.union = union
+        self.tables = tables_for(embedder.dimensions, embedder.finetuned)
         self.model_lock = asyncio.Lock()  # the GPU models are shared by concurrent queries
 
     @classmethod
-    def load(cls, index_dir: Path | None = None, rerank: bool = True) -> "RetrievalPipeline":
+    def load(
+        cls,
+        index_dir: Path | None = None,
+        rerank: bool = True,
+        embedder: Embedder | None = None,
+        union: bool = False,
+        rerank_tokens: int = FULL_TOKENS,
+    ) -> "RetrievalPipeline":
         """Load gte-modernbert, the BM25 index of the whole corpus and the reranker.
 
         Args:
             index_dir: Folder of the BM25 index; the whole corpus's by default.
             rerank: Load gte-reranker-modernbert and rerank the fused documents.
+            embedder: The embedder to search with; the base gte-modernbert by default. A
+                fine-tuned one searches its own tables.
+            union: Rerank the union of both searches instead of the fused top 50.
+            rerank_tokens: Tokens of each document the reranker reads.
 
         Returns:
             The ready pipeline.
         """
-        embedder = GteModernBertEmbedder()
+        embedder = embedder or GteModernBertEmbedder()
         with Session(get_engine()) as session:
-            sources = embedded_sources(session, embedder.dimensions, embedder.name, FIELD)
+            sources = embedded_sources(
+                session, tables_for(embedder.dimensions, embedder.finetuned), embedder.name, FIELD
+            )
 
         return cls(
             get_async_engine(),
             embedder,
             Bm25Retriever(index_dir or bm25_index_dir(None)),
             sources,
-            GteModernBertReranker() if rerank else None,
+            GteModernBertReranker(max_tokens=rerank_tokens) if rerank else None,
+            union,
         )
 
-    async def run(self, query: str, limit: int = 10) -> list[RetrievedDocument]:
+    async def run(
+        self, query: str, limit: int = 10, keyword_query: str | None = None
+    ) -> list[RetrievedDocument]:
         """Find the documents for a query.
 
         Args:
             query: The question or search text.
             limit: Number of documents.
+            keyword_query: What BM25 searches instead of the query (the query with
+                rewrites appended), or None for the query itself. gte and the reranker
+                always read the query.
 
         Returns:
             The documents, best first, with their titles and best chunks.
@@ -111,10 +138,14 @@ class RetrievalPipeline:
         clean = normalize_text(query)
         # 2. Search, 3. best chunk per document
         semantic, keyword = await asyncio.gather(
-            self.semantic_search(clean), self.keyword_search(clean)
+            self.semantic_search(clean),
+            self.keyword_search(normalize_text(keyword_query) if keyword_query else clean),
         )
-        # 4. Fuse; gte comes first so its best chunk describes the document
+        # 4. Fuse; gte comes first so its best chunk describes the document. The union
+        # keeps every document of both searches for the reranker.
         depth = RERANK_DEPTH if self.reranker else limit
+        if self.reranker and self.union:
+            depth = 2 * CANDIDATES
         fused = reciprocal_rank_fusion({"gte": semantic, "bm25": keyword}, max(depth, limit))
         # 5. Load
         documents = await self.describe(fused)
@@ -196,56 +227,49 @@ class RetrievalPipeline:
         Returns:
             The same documents, in order, with title and text.
         """
-        sources = {document.source_type for document in documents}
-        titles, texts = await asyncio.gather(
-            self.load_titles([document.document_id for document in documents]),
-            asyncio.gather(*(self.load_texts(source_type, documents) for source_type in sources)),
+        return await describe_documents(
+            self.engine, self.tables, self.embedder.name, FIELD, documents
         )
-        text_of = {key: text for source_texts in texts for key, text in source_texts.items()}
 
-        return [
-            document.model_copy(
-                update={
-                    "title": titles.get(document.document_id, ""),
-                    "text": text_of.get((document.document_id, document.position), ""),
-                }
+    async def rerank_cached(
+        self, query: str, documents: list[RetrievedDocument], scores: dict[str, float]
+    ) -> list[RetrievedDocument]:
+        """Rerank documents, scoring only the ones not scored for this query before.
+
+        Documents without text (found by another search than this pipeline's) are
+        described first, from their chunk at `position`.
+
+        Args:
+            query: The question or search text, as asked.
+            documents: Documents to order, with or without text.
+            scores: Reranker scores of this query by doc id, from earlier calls; the new
+                scores are added to it.
+
+        Returns:
+            The documents with their scores, most relevant first.
+
+        Raises:
+            ValueError: If the pipeline has no reranker.
+        """
+        if self.reranker is None:
+            raise ValueError("The pipeline was loaded without a reranker")
+
+        new = [document for document in documents if document.doc_id not in scores]
+        unread = [document for document in new if not document.text and not document.title]
+        described = {document.doc_id: document for document in await self.describe(unread)}
+        new = [described.get(document.doc_id, document) for document in new]
+        if new:
+            reranked = await self.rerank(self.reranker, normalize_text(query), new)
+            scores.update({document.doc_id: document.rerank_score or 0.0 for document in reranked})
+
+        scored = [
+            described.get(document.doc_id, document).model_copy(
+                update={"rerank_score": scores[document.doc_id]}
             )
             for document in documents
         ]
 
-    async def load_titles(self, ids: list[int]) -> dict[int, str]:
-        """Load document titles.
-
-        Args:
-            ids: Document row ids.
-
-        Returns:
-            Titles keyed by row id.
-        """
-        async with AsyncSession(self.engine) as session:
-            return await document_titles(session, ids)
-
-    async def load_texts(
-        self, source_type: SourceType, documents: list[RetrievedDocument]
-    ) -> dict[tuple[int, int], str]:
-        """Load the chunk texts of the documents of one source.
-
-        Args:
-            source_type: Source whose table holds the chunks.
-            documents: Fused documents of any source.
-
-        Returns:
-            Chunk texts keyed by (document row id, position).
-        """
-        keys = [
-            (document.document_id, document.position)
-            for document in documents
-            if document.source_type == source_type
-        ]
-        async with AsyncSession(self.engine) as session:
-            return await chunk_texts(
-                session, self.tables[source_type], self.embedder.name, FIELD, keys
-            )
+        return sorted(scored, key=lambda document: document.rerank_score or 0.0, reverse=True)
 
     async def rerank(
         self, reranker: Reranker, query: str, documents: list[RetrievedDocument]
@@ -274,22 +298,3 @@ class RetrievalPipeline:
         """Close the database connections."""
         await self.engine.dispose()
 
-
-async def run_retrieval(
-    query: str, limit: int = 10, rerank: bool = True
-) -> list[RetrievedDocument]:
-    """Load the pipeline, answer one query and close it.
-
-    Args:
-        query: The question or search text.
-        limit: Number of documents.
-        rerank: Rerank the fused documents.
-
-    Returns:
-        The documents, best first.
-    """
-    pipeline = RetrievalPipeline.load(rerank=rerank)
-    try:
-        return await pipeline.run(query, limit)
-    finally:
-        await pipeline.close()

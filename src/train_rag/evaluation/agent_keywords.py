@@ -91,7 +91,7 @@ class KeywordAgentSystem(SnippetAgentSystem):
             True while general searches, keyword searches or reads are left.
         """
         return (
-            budget.searches < self.max_searches
+            budget.searches < self.max_searches + budget.extra_searches
             or budget.keyword_searches < self.max_keyword
             or budget.reads < self.max_reads
         )
@@ -118,7 +118,7 @@ class KeywordAgentSystem(SnippetAgentSystem):
             budget.keyword_searches += 1
 
             return self.keyword_snippets(str(arguments.get("query") or question))
-        if budget.searches >= self.max_searches:
+        if budget.searches >= self.max_searches + budget.extra_searches:
             return {"error": SEMANTIC_LIMIT}, []
 
         return super().run_tool(tool, arguments, question, budget)

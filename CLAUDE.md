@@ -19,3 +19,10 @@ Rules for Claude:
 ```bash
 uv run ruff check . && uv run mypy src tests && uv run pytest
 ```
+
+## GPU work on Vast.ai
+
+Read `docs/vast_ai.md` before renting a machine. In short: ask the user first (it costs
+money), watch the credit, never print keys, destroy with `-y`, and don't leave a machine
+idle. The scripts in `exploration/embedder_finetune/vast/` keep one machine up for several
+runs.

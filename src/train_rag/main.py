@@ -4,17 +4,21 @@ import argparse
 import asyncio
 from pathlib import Path
 
+from train_rag.clarify import report_clarification, write_memories
 from train_rag.download import DEFAULT_DATA_DIR, download_dataset
 from train_rag.embedder import EMBEDDERS
 from train_rag.evaluate import evaluate, evaluate_search
+from train_rag.evaluation.clarify_report import read_question_ids
 from train_rag.evaluation.registry import JUDGES, RETRIEVERS, SYSTEMS
 from train_rag.import_db import import_corpus
 from train_rag.index_bm25 import index_bm25
 from train_rag.index_summaries import index_summaries
+from train_rag.mined_fields.cli import add_field_commands, run_field_command
 from train_rag.models import QuestionType
 from train_rag.pipelines.data_ingestion import run_data_ingestion
-from train_rag.pipelines.retrieval import run_retrieval
 from train_rag.progress.page import serve_progress_page
+from train_rag.progress.workflow_cli import add_workflow_commands, run_workflow_command
+from train_rag.retrieve import run_retrieval
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,6 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     page = commands.add_parser("progress-page", help="serve a web page with the run's progress")
     page.add_argument("--port", type=int, default=8765)
+    add_workflow_commands(commands)
+    add_field_commands(commands)
     keywords = commands.add_parser("index-bm25", help="build a BM25 keyword index on disk")
     keywords.add_argument(
         "--sample", type=int, help="only the cited documents plus N random distractors"
@@ -69,6 +75,20 @@ def build_parser() -> argparse.ArgumentParser:
     scoring.add_argument(
         "--wrong-in", type=int, metavar="RUN", help="only the questions this run got wrong"
     )
+    scoring.add_argument(
+        "--question-ids", type=Path, metavar="FILE", help="only these questions, one id per line"
+    )
+    memories = commands.add_parser(
+        "write-memories", help="write what the person behind each question remembers (Gemini)"
+    )
+    memories.add_argument("--question-ids", type=Path, metavar="FILE", required=True)
+    memories.add_argument("--redo", nargs="+", metavar="ID", help="rewrite only these notes")
+    clarify = commands.add_parser(
+        "clarify-report", help="compare a run with clarifying questions against zero-shot"
+    )
+    clarify.add_argument("--run", type=int, required=True, help="the run with clarification")
+    clarify.add_argument("--baseline", type=int, required=True, help="the zero-shot run")
+    clarify.add_argument("--question-ids", type=Path, metavar="FILE", required=True)
 
     return parser
 
@@ -92,6 +112,12 @@ def main() -> None:
 
     if args.command == "progress-page":
         serve_progress_page(args.port)
+
+    if args.command == "workflow":
+        run_workflow_command(args)
+
+    if args.command in ("import-fields", "embed-fields"):
+        run_field_command(args)
 
     if args.command == "index-bm25":
         index_bm25(args.sample)
@@ -117,7 +143,14 @@ def main() -> None:
             args.limit,
             args.workers,
             args.wrong_in,
+            read_question_ids(args.question_ids) if args.question_ids else None,
         )
+
+    if args.command == "write-memories":
+        write_memories(read_question_ids(args.question_ids), args.redo)
+
+    if args.command == "clarify-report":
+        report_clarification(args.run, args.baseline, read_question_ids(args.question_ids))
 
 
 if __name__ == "__main__":

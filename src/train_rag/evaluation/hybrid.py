@@ -84,6 +84,44 @@ class PipelineRetriever(Retriever):
 
         return to_hits(future.result())
 
+    def search(
+        self, query: str, limit: int, keyword_query: str | None = None
+    ) -> list[RetrievedDocument]:
+        """Run the pipeline for one query and keep its documents as the pipeline gives them.
+
+        Args:
+            query: What gte and the reranker read.
+            limit: Number of documents.
+            keyword_query: What BM25 searches instead, or None for the query.
+
+        Returns:
+            The documents, best first, with title, best chunk and rerank score.
+        """
+        future = asyncio.run_coroutine_threadsafe(
+            self.pipeline.run(query, limit, keyword_query), self.loop
+        )
+
+        return future.result()
+
+    def rerank(
+        self, query: str, documents: list[RetrievedDocument], scores: dict[str, float]
+    ) -> list[RetrievedDocument]:
+        """Order documents from any search by the reranker, scoring each one only once.
+
+        Args:
+            query: What the reranker reads with each document.
+            documents: Documents to order; ones without text are loaded from their chunk.
+            scores: Earlier scores for this query by doc id; new ones are added.
+
+        Returns:
+            The documents, most relevant first, with their scores.
+        """
+        future = asyncio.run_coroutine_threadsafe(
+            self.pipeline.rerank_cached(query, documents, scores), self.loop
+        )
+
+        return future.result()
+
     def retrieve_keywords(self, query: str, limit: int) -> list[SearchHit]:
         """Search by keywords alone (BM25), without fusion or reranking.
 

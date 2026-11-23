@@ -52,10 +52,50 @@
   dd { margin: 2px 0 0; font-size: 20px; font-variant-numeric: tabular-nums; }
   .updated { color: var(--muted); font-size: 13px; margin-top: 24px; }
   @media (max-width: 480px) { dl { grid-template-columns: 1fr; } }
+  /* Workflow: steps shown like a CI/CD job (GitHub Actions). */
+  .workflow { margin-bottom: 20px; padding: 0; overflow: hidden; }
+  .wf-head {
+    display: flex; align-items: center; gap: 10px; padding: 18px 22px;
+    border-bottom: 1px solid var(--line);
+  }
+  .wf-head h2 { font-size: 16px; margin: 0; font-weight: 600; flex: 1; min-width: 0; }
+  .wf-time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .wf-steps { list-style: none; margin: 0; padding: 6px 0; }
+  .wf-step { padding: 9px 22px; }
+  .wf-row { display: flex; align-items: center; gap: 12px; }
+  .wf-name { flex: 1; min-width: 0; }
+  .wf-step.queued .wf-name, .wf-step.skipped .wf-name { color: var(--muted); }
+  .wf-step.running { background: color-mix(in srgb, var(--bar) 7%, transparent); }
+  .wf-dur { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .wf-pct { width: 48px; text-align: right; font-size: 14px; font-weight: 600;
+            font-variant-numeric: tabular-nums; color: var(--muted); }
+  .wf-pct.running { color: var(--bar); } .wf-pct.success { color: var(--ok); }
+  .wf-pct.failed { color: var(--warn); }
+  .wf-detail { margin: 6px 0 2px 32px; }
+  .wf-detail .mini { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+  .wf-detail .mini div { height: 100%; background: var(--bar); border-radius: 3px; transition: width .6s; }
+  .wf-detail p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  .icon { width: 20px; height: 20px; flex: none; border-radius: 50%; display: grid; place-items: center;
+          font-size: 12px; font-weight: 700; color: #fff; }
+  .icon.queued { border: 2px solid var(--line); }
+  .icon.waiting { border: 2px dashed #d4a72c; }
+  .icon.running { border: 2px solid var(--track); border-top-color: #d4a72c; animation: spin 1s linear infinite; }
+  .icon.success { background: var(--ok); }
+  .icon.failed { background: var(--warn); }
+  .icon.skipped { border: 2px solid var(--line); color: var(--muted); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .icon.running { animation: none; } }
 </style>
 </head>
 <body>
 <main>
+  <section class="card workflow" id="workflow" hidden>
+    <div class="wf-head">
+      <h2 id="wf-name"></h2>
+      <span class="wf-time" id="wf-time"></span>
+    </div>
+    <ol class="wf-steps" id="wf-steps"></ol>
+  </section>
   <div class="card" id="card">
     <h1 id="pipeline">Waiting for a run…</h1>
     <p class="stage" id="stage">Start one with <code>uv run train-rag ingest</code> or <code>evaluate</code>.</p>
@@ -151,15 +191,113 @@
     drawFavicon(share, run.status);
   }
 
+  // Workflow panel: every step of the latest job, like CI/CD steps.
+  let flow = null;
+  const ICONS = { success: "✓", failed: "✕", skipped: "–", queued: "", running: "" };
+  // Every step's percentage: its bar when it has one, 100% when it succeeded, 0% before.
+  function stepPercent(step) {
+    const run = step.run;
+    if (run) {
+      const share = run.total_chars ? run.done_chars / run.total_chars
+        : run.total_items ? run.done_items / run.total_items : 0;
+      return `${Math.floor(share * 100)}%`;
+    }
+    if (step.status === "success") return "100%";
+    if (step.status === "skipped") return "–";
+    if (step.status === "running") return "…";
+    return "0%";
+  }
+
+  function renderWorkflow() {
+    const panel = document.getElementById("workflow");
+    if (!flow) { panel.hidden = true; return; }
+    panel.hidden = false;
+    const head = document.getElementById("wf-name");
+    head.textContent = flow.workflow;
+    const badge = document.createElement("span");
+    const label = { running: "running", success: "finished", failed: "stopped" }[flow.status];
+    badge.className = `status ${label}`;
+    badge.textContent = flow.status;
+    head.append(badge);
+    const shares = flow.steps.map((step) => {
+      if (step.status === "success" || step.status === "skipped") return 1;
+      const pct = parseFloat(stepPercent(step));
+      return isNaN(pct) ? 0 : pct / 100;
+    });
+    const overall = shares.reduce((a, b) => a + b, 0) / Math.max(shares.length, 1);
+    set("wf-time", `${Math.floor(overall * 100)}% · ${duration(flow.seconds_elapsed)}`);
+    const list = document.getElementById("wf-steps");
+    list.replaceChildren(...flow.steps.map((step) => {
+      const item = document.createElement("li");
+      item.className = `wf-step ${step.status}`;
+      const row = document.createElement("div");
+      row.className = "wf-row";
+      const icon = document.createElement("span");
+      const waiting = step.status === "queued" && step.note;
+      icon.className = `icon ${waiting ? "waiting" : step.status}`;
+      icon.textContent = ICONS[step.status];
+      const name = document.createElement("span");
+      name.className = "wf-name";
+      name.textContent = step.name;
+      const time = document.createElement("span");
+      time.className = "wf-dur";
+      time.textContent = step.seconds === null ? "" : duration(step.seconds);
+      const percent = document.createElement("span");
+      percent.className = `wf-pct ${step.status}`;
+      percent.textContent = stepPercent(step);
+      row.append(icon, name, time, percent);
+      item.append(row);
+      const run = step.run;
+      if ((step.status === "running" && run) || step.note) {
+        const detail = document.createElement("div");
+        detail.className = "wf-detail";
+        if (step.status === "running" && run) {
+          const share = run.total_chars ? run.done_chars / run.total_chars
+            : run.total_items ? run.done_items / run.total_items : 0;
+          const mini = document.createElement("div");
+          mini.className = "mini";
+          const fill = document.createElement("div");
+          fill.style.width = `${share * 100}%`;
+          mini.append(fill);
+          detail.append(mini);
+          const line = document.createElement("p");
+          const left = run.seconds_left === null ? "estimating…" : `${duration(run.seconds_left)} left`;
+          line.textContent = `${number(run.done_items)} / ${number(run.total_items)} ${run.unit} · ${(share * 100).toFixed(1)}% · ${left}`;
+          detail.append(line);
+        }
+        if (step.note) {
+          const note = document.createElement("p");
+          note.textContent = step.note;
+          detail.append(note);
+        }
+        item.append(detail);
+      }
+      return item;
+    }));
+  }
+
   async function poll() {
     try {
-      const state = await (await fetch("/api/progress", { cache: "no-store" })).json();
+      const [state, workflow] = await Promise.all([
+        (await fetch("/api/progress", { cache: "no-store" })).json(),
+        (await fetch("/api/workflow", { cache: "no-store" })).json(),
+      ]);
       offline = false;
-      if (state) { run = state; fetchedAt = Date.now(); }
+      flow = workflow;
+      // In a workflow, the big card follows the running step (or the last step with a bar);
+      // a run from outside the workflow (an older job) is not shown.
+      const current = flow
+        ? (flow.steps.find((step) => step.status === "running" && step.run)
+           || [...flow.steps].reverse().find((step) => step.run))
+        : null;
+      const shown = flow ? (current ? current.run : null) : state;
+      document.getElementById("card").hidden = flow !== null && shown === null;
+      if (shown) { run = shown; fetchedAt = Date.now(); }
     } catch {
       offline = true;
     }
     render();
+    renderWorkflow();
   }
 
   drawFavicon(0, "running");

@@ -1,6 +1,6 @@
 """Queries for the embedding tables: store vectors, index them and search them."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from sqlalchemy import insert, text
 from sqlmodel import Session, col, delete, select
@@ -177,12 +177,17 @@ def drop_vector_index(session: Session, table: type[EmbeddingRecord]) -> None:
     session.commit()
 
 
-def embedded_sources(session: Session, dimensions: int, model: str, field: str) -> list[SourceType]:
+def embedded_sources(
+    session: Session,
+    tables: Mapping[SourceType, type[EmbeddingRecord]],
+    model: str,
+    field: str,
+) -> list[SourceType]:
     """List the sources that have embeddings of a field from a model.
 
     Args:
         session: Active database session.
-        dimensions: Vector size of the model.
+        tables: The model's tables (`tables_for`).
         model: Embedding model name.
         field: Embedded field.
 
@@ -191,7 +196,7 @@ def embedded_sources(session: Session, dimensions: int, model: str, field: str) 
     """
     return [
         source_type
-        for source_type, table in EMBEDDING_TABLES[dimensions].items()
+        for source_type, table in tables.items()
         if session.exec(
             select(table.id).where(table.model == model, table.field == field).limit(1)
         ).first()

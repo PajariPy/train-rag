@@ -29,3 +29,25 @@ temp/
 # Gemini batch inputs and raw outputs (large, regenerable)
 exploration/*/data/batch_requests.jsonl
 exploration/*/data/batch_results.jsonl
+
+# Fine-tuning outputs (LoRA adapters, logs) copied back from rented GPUs
+exploration/fact_extraction/runs/
+exploration/embedder_finetune/runs/
+exploration/embedder_finetune/vast/.instance*
+exploration/training_questions/data/uuid_index.json
+
+# Fine-tuned model weights (copied from a training run)
+/models/
+
+# Weights & Biases local run files
+/wandb/
+# SLM field-extractor runs: keep the reports and logs, not the big artefacts
+exploration/slm_fields/runs/*/adapter/
+exploration/slm_fields/runs/*/outputs.jsonl
+exploration/slm_fields/runs/*/prompts.jsonl
+exploration/slm_fields/runs/*/*.npz
+exploration/slm_fields/runs/mine-*/part*/
+exploration/slm_fields/runs/mine-*/smoke/
+exploration/slm_fields/runs/mine-*/out/
+exploration/slm_fields/runs/mine-*/state/
+exploration/slm_fields/runs/mine-*/labels.jsonl

@@ -16,7 +16,7 @@ from train_rag.fusion import best_per_document
 from train_rag.index_bm25 import DOCUMENTS_FILE, tokenize
 from train_rag.models.retrieval import IndexedDocument, SearchHit
 from train_rag.repository.embedding import embedded_doc_ids, embedded_sources, search_embeddings
-from train_rag.tables import EMBEDDING_TABLES
+from train_rag.tables import tables_for
 
 CHUNKS_PER_DOCUMENT = 5
 
@@ -70,10 +70,10 @@ class EmbeddingRetriever(Retriever):
         self.engine = engine
         self.embedder = embedder
         self.field = field
-        self.tables = EMBEDDING_TABLES[embedder.dimensions]
+        self.tables = tables_for(embedder.dimensions, embedder.finetuned)
         self.lock = threading.Lock()
         with Session(engine) as session:
-            self.sources = embedded_sources(session, embedder.dimensions, embedder.name, field)
+            self.sources = embedded_sources(session, self.tables, embedder.name, field)
 
     def searchable_doc_ids(self) -> set[str]:
         """List the documents with embeddings of this retriever's field and model.

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Search failures</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232d6a8e'/%3E%3Ccircle cx='14' cy='14' r='7' fill='none' stroke='%23f6f7f5' stroke-width='3'/%3E%3Cpath d='M19 19l6 6' stroke='%23f6f7f5' stroke-width='3.5' stroke-linecap='round'/%3E%3Cpath d='M11 14h6' stroke='%23f6f7f5' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -373,8 +374,8 @@ function render(c) {
   if (sc) {
     const sizes = [["stored", "24,000 (stored)"], ["4000", "4,000"], ["2000", "2,000"], ["1000", "1,000"]];
     html += `<h3>With smaller gte chunks</h3>
-      <p class="muted small">The expected document's place among gte's top 50 plus itself (${sc.pool} documents), re-chunked at each size.</p>
-      <table><thead><tr><th>Chunk size</th><th class="num">Rank in pool</th><th class="num">Its similarity</th><th class="num">Pool's best</th></tr></thead><tbody>
+      <p class="muted small">The expected document's place among gte's top 50 plus itself (${sc.pool} candidates), re-chunked at each size.</p>
+      <table><thead><tr><th>Chunk size</th><th class="num">Rank among candidates</th><th class="num">Its similarity</th><th class="num">Best candidate</th></tr></thead><tbody>
       ${sizes.map(([k, n]) => `<tr><td>${n}</td><td class="num">${sc[k].rank}</td><td class="num">${sc[k].target.toFixed(3)}</td><td class="num">${sc[k].top.toFixed(3)}</td></tr>`).join("")}
       </tbody></table>`;
   }
