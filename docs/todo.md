@@ -6,7 +6,7 @@ kanban-plugin: board
 
 ## Later
 
-- [ ] [[Measure pipeline speed and cost]] #medium
+- [ ] [[Private and personal data questions]] #article-only
 - [ ] [[Add observability and RAG quality tracking]] #medium
 - [ ] [[Article - strategy for messier documents]] #low
 - [ ] [[Article - problems by metric and how to fix them]] #low
@@ -20,7 +20,8 @@ kanban-plugin: board
 - [ ] [[Rewrite the query from the chat history]] #high
 - [ ] [[Prepare the evaluation for the final run]] #high
 - [ ] [[Evaluate the full pipeline with clarifying questions]] #high
-- [ ] [[Detect out-of-scope questions]] #medium
+- [ ] [[Detect out-of-scope questions]] #high
+- [ ] [[Measure pipeline speed and cost]] #high
 - [ ] [[Add guardrails]] #medium
 
 
