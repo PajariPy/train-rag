@@ -4,21 +4,34 @@
     "type": "split",
     "children": [
       {
-        "id": "373de8a19bfc275c",
+        "id": "265decf5a2509abc",
         "type": "tabs",
         "children": [
           {
-            "id": "64e7bb44a8b56f5b",
+            "id": "71b9571c68deb0cf",
             "type": "leaf",
             "state": {
-              "type": "markdown",
+              "type": "kanban",
               "state": {
-                "file": "docs/todo.md",
-                "mode": "preview",
-                "source": false
+                "file": "docs/todo/Run the final evaluation.md",
+                "kanbanViewState": {
+                  "kanban-plugin": "board",
+                  "list-collapse": [
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false
+                  ]
+                }
               },
-              "icon": "lucide-file",
-              "title": "todo"
+              "icon": "lucide-trello",
+              "title": "Run the final evaluation"
             }
           }
         ]
@@ -56,7 +69,7 @@
               "type": "search",
               "state": {
                 "query": "",
-                "matchingCase": false,
+                "matchingCase": true,
                 "explainSearch": false,
                 "collapseAll": false,
                 "extraContext": false,
@@ -176,6 +189,7 @@
   },
   "left-ribbon": {
     "hiddenItems": {
+      "obsidian-kanban:Create new board": false,
       "switcher:Open quick switcher": false,
       "graph:Open graph view": false,
       "canvas:Create new canvas": false,
@@ -185,46 +199,51 @@
       "bases:Create new base": false
     }
   },
-  "active": "64e7bb44a8b56f5b",
+  "active": "71b9571c68deb0cf",
   "lastOpenFiles": [
-    "exploration/embedder_finetune/runs/qwen-lr5e-6-e2/stdout.log",
-    "exploration/embedder_finetune/runs/qwen-lr5e-6-e2/train.log",
-    "exploration/embedder_finetune/runs/qwen-lr5e-6-e2",
-    "exploration/embedder_finetune/data/dev_search_gte-modernbert-ft.json",
-    "exploration/embedder_finetune/data/dev_search_gte-modernbert-base.json",
-    "exploration/embedder_finetune/sedqOceXL",
-    "exploration/embedder_finetune/dev_search.py",
-    "exploration/embedder_finetune/dev_search.py.tmp.456469.2e44cf4b1c61",
-    "exploration/embedder_finetune/data/vectors/part_3_6.npz",
-    "exploration/embedder_finetune/data/vectors/part_3_5.npz",
-    "exploration/embedder_finetune/data/vectors/part_3_4.npz",
-    "models/gte-modernbert-ft/README.md",
-    "exploration/embedder_finetune/runs/lr5e-6-e2/final/README.md",
-    "exploration/embedder_finetune/runs/gte-1024-e1/final/README.md",
-    "exploration/embedder_finetune/runs/gte-1024-e1/checkpoint-65/README.md",
-    "exploration/embedder_finetune/runs/gte-1024-e1/checkpoint-52/README.md",
-    "exploration/embedder_finetune/runs/gte-1024-e1/checkpoint-39/README.md",
-    "exploration/embedder_finetune/runs/gte-1024-e1/checkpoint-26/README.md",
-    "exploration/embedder_finetune/runs/gte-1024-e1/checkpoint-13/README.md",
-    "exploration/embedder_finetune/runs/smoke/final/README.md",
-    "exploration/embedder_finetune/runs/smoke/checkpoint-4/README.md",
-    "exploration/embedder_finetune/runs/smoke/checkpoint-3/README.md",
-    "exploration/embedder_finetune/runs/smoke/checkpoint-2/README.md",
-    "exploration/embedder_finetune/runs/smoke/checkpoint-1/README.md",
-    "docs/research/document_growth_problem.canvas",
+    "docs/todo/evaluation/E17 Write up the results.md",
+    "docs/todo/evaluation/E16 Run the full evaluation.md",
+    "docs/todo/evaluation/E15 Smoke-test both systems.md",
+    "docs/todo/evaluation/E14 Compare with the ragas library.md",
+    "docs/todo/evaluation/E13 Add the refusal verdict.md",
+    "docs/todo/evaluation/E12 Recheck the off-topic set.md",
+    "docs/todo/evaluation/E11 Build the off-topic set.md",
+    "docs/todo/evaluation/E10 Judge RAGAS metrics with Gemini.md",
+    "docs/todo/evaluation/E09 Split the report.md",
+    "docs/todo/evaluation/E08 Count refusals.md",
+    "docs/todo/evaluation/E07 Time every stage and price it.md",
+    "docs/todo/evaluation/E06 Measure agent effort.md",
+    "docs/todo/evaluation/E05 Add retrieval metrics.md",
+    "docs/todo/evaluation/E04 Score citations.md",
+    "docs/todo/evaluation/E03 Judge strict and lenient.md",
+    "docs/todo/evaluation/E02 Write memory notes v3 in tiers.md",
+    "docs/todo/evaluation/E01 Label ambiguity and alternate gold.md",
+    "docs/todo/evaluation",
     "docs/todo.md",
+    "docs/todo/Run the final evaluation.md.tmp.11224.5621015aa06d",
+    "docs/todo/Run the final evaluation.md",
+    "docs/todo/sedRnFnh2",
+    "docs/todo/Run the final evaluation.md.tmp.11224.eb09a93170f1",
+    "exploration/slm_fields/runs/mine-r16-e2/state/done/part1.env",
+    "exploration/slm_fields/runs/mine-r16-e2/out/part1/stop.log",
+    "exploration/slm_fields/runs/mine-r16-e2/out/part1/shard_04.done",
+    "exploration/slm_fields/runs/mine-r16-e2/out/part1/shard_04.jsonl",
+    "exploration/slm_fields/runs/mine-r16-e2/out/part1/shard_03.done",
+    "exploration/slm_fields/runs/mine-r16-e2/out/part1/shard_03.jsonl",
+    "docs/todo/Port the prod path to LangGraph.md",
+    "docs/todo/Article - detect data drift for the SLM.md",
     "docs/articles/000_the_article.md",
-    "docs/superpowers/plans/2026-11-11-synthetic-training-questions.md",
-    "docs/brainstorm/005_synthetic_training_questions.md",
-    "docs/brainstorm/004_reranker_grey_zone.md",
-    "docs/brainstorm/003_negative_sampling_dataset.md",
-    "docs/superpowers/specs/2026-11-09-clarification-eval-design.md",
-    "docs/superpowers/plans/2026-11-09-clarification-eval.md",
+    "docs/todo/Private and personal data questions.md",
+    "docs/superpowers/specs/2026-11-23-evaluation-update-design.md",
+    "docs/brainstorm/007_evaluation_drift.md",
+    "docs/articles/009_reviewed_detecting_data_drift_for_the_slm.md",
+    "docs/todo_roadmap.canvas",
+    "docs/research/research_map.canvas",
     "docs/research/semantic_search_failure_problem.canvas",
-    "docs/brainstorm/002_small_models_for_fact_extraction.md",
-    "docs/articles/006_first_lora_and_checking_the_labels.md",
-    "docs/articles/005_cheap_labels_for_fact_extraction.md",
-    "temp/session_summary_2026-11-09.md",
+    "docs/research/document_growth_problem.canvas",
+    "docs/research/data_preprocessing_problem.canvas",
+    "docs/research/llm_abstention_problem.canvas",
+    "docs/Test.canvas",
     "docs/brainstorm/003_fact_index_options.canvas",
     "Untitled.canvas"
   ]

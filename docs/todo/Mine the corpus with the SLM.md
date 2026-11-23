@@ -47,4 +47,4 @@ The SLM is ready ([[Train the Slack field extractor SLM]]):
    `exploration/slm_fields/field_search_compare.py` on the full pool as a smoke check;
    a few outputs per source read by hand.
 
-Paid: ask first. Then [[Prepare the evaluation for the final run]].
+Paid: ask first. Then [[Run the final evaluation]].
