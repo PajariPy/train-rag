@@ -3,7 +3,7 @@ data the connected tools don't hold (salary, vacation days, HR records, someone'
 
 ## Why
 EnterpriseRAG-Bench has no such data, so the off-topic set can't test it (see
-[[Detect out-of-scope questions]]). A real deployment gets these questions on day one, and a
+[[Run the final evaluation]], off-topic set). A real deployment gets these questions on day one, and a
 look-alike document (an HR policy, a payroll thread) can produce a confident wrong answer
 or leak someone else's data.
 

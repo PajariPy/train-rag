@@ -7,8 +7,8 @@ kanban-plugin: board
 ## Later
 
 - [ ] [[Private and personal data questions]] #article-only
+- [ ] [[Port the prod path to LangGraph]] #medium
 - [ ] [[Add observability and RAG quality tracking]] #medium
-- [ ] [[Article - strategy for messier documents]] #low
 - [ ] [[Article - problems by metric and how to fix them]] #low
 - [ ] [[Article - future map]] #low
 - [ ] [[Approach human-style data problems]] #medium
@@ -16,23 +16,21 @@ kanban-plugin: board
 
 ## Next
 
-- [ ] [[Mine the corpus with the SLM]] #high
+- [ ] [[Run the final evaluation]] #high
 - [ ] [[Rewrite the query from the chat history]] #high
-- [ ] [[Prepare the evaluation for the final run]] #high
-- [ ] [[Evaluate the full pipeline with clarifying questions]] #high
-- [ ] [[Detect out-of-scope questions]] #high
-- [ ] [[Measure pipeline speed and cost]] #high
 - [ ] [[Add guardrails]] #medium
 
 
 ## In progress
 
-- [ ] [[Port to LangGraph and LangChain]] #medium
+- [ ] [[Mine the corpus with the SLM]] #high
 
 
 ## Done
 
 **Complete**
+- [x] [[Article - detect data drift for the SLM]] #low
+- [x] [[Article - strategy for messier documents]] #low
 - [x] [[Train the Slack field extractor SLM]] #high
 - [x] [[Update the pipeline with the accepted experiments]] #done
 - [x] [[Show the agent where its results disagree]] #done

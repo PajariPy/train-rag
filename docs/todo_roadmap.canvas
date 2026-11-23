@@ -4,11 +4,11 @@
 			"id": "phase2",
 			"type": "group",
 			"x": -24,
-			"y": 1096,
+			"y": 814,
 			"width": 508,
-			"height": 880,
+			"height": 316,
 			"color": "5",
-			"label": "Phase 2 · Chat, honest answers, speed"
+			"label": "Phase 2 · Chat"
 		},
 		{
 			"id": "phase1",
@@ -16,7 +16,7 @@
 			"x": -24,
 			"y": 50,
 			"width": 508,
-			"height": 936,
+			"height": 654,
 			"color": "3",
 			"label": "▶ Phase 1 · SLM, pipeline, final evaluation (now)"
 		},
@@ -29,14 +29,14 @@
 			"x": 636,
 			"y": 40,
 			"width": 508,
-			"height": 508,
+			"height": 354,
 			"label": "Articles (any time, not in the sequence)"
 		},
 		{
 			"id": "phase4",
 			"type": "group",
 			"x": -24,
-			"y": 2384,
+			"y": 1538,
 			"width": 508,
 			"height": 232,
 			"color": "6",
@@ -46,7 +46,7 @@
 			"id": "phase3",
 			"type": "group",
 			"x": -24,
-			"y": 2086,
+			"y": 1240,
 			"width": 508,
 			"height": 188,
 			"color": "5",
@@ -63,28 +63,9 @@
 			"color": "3"
 		},
 		{
-			"id": "t4",
-			"type": "text",
-			"text": "## 5 · [[Detect out-of-scope questions]]\nSay \"not found\" instead of answering: a 4th verdict, \"no document answers\", in the agent's check.\n**Done when:** 50–100 off-topic questions built in rerunnable rounds; refusal rates measured.",
-			"x": 0,
-			"y": 1458,
-			"width": 460,
-			"height": 240
-		},
-		{
-			"id": "t5",
-			"type": "text",
-			"text": "## 3 · [[Evaluate the full pipeline with clarifying questions]]\nThe final evaluation: benchmark + Slack dev set end to end, with ambiguous and multi-turn questions and the simulated person; repeated runs.",
-			"x": 0,
-			"y": 750,
-			"width": 460,
-			"height": 212,
-			"color": "3"
-		},
-		{
 			"id": "title",
 			"type": "text",
-			"text": "# Roadmap\n⬇ in order. The SLM is trained and scored (22 Nov): it searches as well as DeepSeek's labels. Now: mine the corpus, then the final evaluation.",
+			"text": "# Roadmap\n⬇ in order. The corpus is mined with the SLM (23 Nov). Now: import and embed the fields, then the final evaluation (one card with a checklist).",
 			"x": 0,
 			"y": -260,
 			"width": 460,
@@ -94,27 +75,18 @@
 		{
 			"id": "t2",
 			"type": "text",
-			"text": "## 4 · [[Rewrite the query from the chat history]]\nOne standalone query from the conversation before the first search; ask_user replies become filters (source, channel, team).\n**Done when:** multi-turn questions score like single questions.",
+			"text": "## 3 · [[Rewrite the query from the chat history]]\nOne standalone query from the conversation before the first search; ask_user replies become filters (source, channel, team).\n**Done when:** multi-turn questions score like single questions.",
 			"x": 0,
-			"y": 1120,
+			"y": 838,
 			"width": 460,
 			"height": 268
-		},
-		{
-			"id": "a1",
-			"type": "text",
-			"text": "[[Article - strategy for messier documents]]\nImages, tables, fragmented Slack dialogs: descriptive only.",
-			"x": 660,
-			"y": 64,
-			"width": 460,
-			"height": 124
 		},
 		{
 			"id": "a2",
 			"type": "text",
 			"text": "[[Article - problems by metric and how to fix them]]\nSymptom in the metrics → cause → fix, from articles 003–007.",
 			"x": 660,
-			"y": 218,
+			"y": 64,
 			"width": 460,
 			"height": 152
 		},
@@ -123,34 +95,25 @@
 			"type": "text",
 			"text": "[[Article - future map]]\nOpen and stopped routes from the research maps, grouped.",
 			"x": 660,
-			"y": 400,
+			"y": 246,
 			"width": 460,
 			"height": 124
 		},
 		{
 			"id": "t6",
 			"type": "text",
-			"text": "## 7 · [[Add guardrails]]\nPrompt injection in documents, access rules, personal data in answers; a small red-team set.",
+			"text": "## 4 · [[Add guardrails]]\nPrompt injection in documents, access rules, personal data in answers; a small red-team set.",
 			"x": 0,
-			"y": 2110,
+			"y": 1264,
 			"width": 460,
 			"height": 140
 		},
 		{
-			"id": "t7",
-			"type": "text",
-			"text": "## 6 · [[Measure pipeline speed and cost]]\nWall time per stage per question; p50 / p95 latency; $ per 1,000 questions.\n**Unblocks:** the production choices (rerank depth, pre-search gate).",
-			"x": 0,
-			"y": 1768,
-			"width": 460,
-			"height": 184
-		},
-		{
 			"id": "t8",
 			"type": "text",
-			"text": "## 8 · [[Add observability and RAG quality tracking]]\nTraces per request, chat metrics (follow-ups, rephrasing, not-found rate), alerts.",
+			"text": "## 5 · [[Add observability and RAG quality tracking]]\nTraces per request, chat metrics (follow-ups, rephrasing, not-found rate), alerts.",
 			"x": 0,
-			"y": 2408,
+			"y": 1562,
 			"width": 460,
 			"height": 184
 		},
@@ -162,14 +125,14 @@
 			"height": 268,
 			"x": 0,
 			"y": 412,
-			"text": "## 2 · [[Prepare the evaluation for the final run]]\nJudge rule (lenient, strict or both), comparability with run 31, memory notes; then field-agent and field-agent-clarify end to end.\n**Done when:** both systems have judged benchmark runs."
+			"text": "## 2 · [[Run the final evaluation]]\nOne card, checklist inside: drift fixes (ambiguity labels, memory notes v3, strict + lenient judge, citations) → free metrics (retrieval, agent effort, stage timing, refusals) → own RAGAS judge → off-topic set + refusal verdict → `ragas` sample → paid runs.\n**Done when:** both systems judged on the 500 + off-topic set, 2–3 repeats, report written."
 		},
 		{
 			"id": "a4",
 			"type": "text",
 			"text": "[[Private and personal data questions]]\nSalary, vacation, HR records: not in this dataset; how a real deployment refuses or routes them.",
 			"x": 660,
-			"y": 560,
+			"y": 400,
 			"width": 460,
 			"height": 124
 		}
@@ -190,36 +153,15 @@
 			"toSide": "top"
 		},
 		{
-			"id": "e_t9_t5",
+			"id": "e_t9_t2",
 			"fromNode": "t9",
-			"toNode": "t5",
-			"fromSide": "bottom",
-			"toSide": "top"
-		},
-		{
-			"id": "e_t5_t2",
-			"fromNode": "t5",
 			"toNode": "t2",
 			"fromSide": "bottom",
 			"toSide": "top"
 		},
 		{
-			"id": "e_t2_t4",
+			"id": "e_t2_t6",
 			"fromNode": "t2",
-			"toNode": "t4",
-			"fromSide": "bottom",
-			"toSide": "top"
-		},
-		{
-			"id": "e_t4_t7",
-			"fromNode": "t4",
-			"toNode": "t7",
-			"fromSide": "bottom",
-			"toSide": "top"
-		},
-		{
-			"id": "e_t7_t6",
-			"fromNode": "t7",
 			"toNode": "t6",
 			"fromSide": "bottom",
 			"toSide": "top"

@@ -32,7 +32,7 @@ Open choices, settle before the run:
   rely on the first search until they are mined.
 
 Checks: unit tests for the new parts; a 20-question smoke run before the full benchmark.
-Then [[Evaluate the full pipeline with clarifying questions]].
+Then [[Run the final evaluation]].
 
 ## Result (20 Nov)
 Built on branch `feature-pipeline-agent` as two systems, `field-agent` (no asking) and
@@ -85,4 +85,4 @@ Built on branch `feature-pipeline-agent` as two systems, `field-agent` (no askin
   - Check verdicts: 19 same answer, 16 one case fits, 1 several cases fit.
   - Time: about 4 minutes per 15–17 questions with 6 in parallel.
 
-Next: [[Prepare the evaluation for the final run]].
+Next: [[Run the final evaluation]].

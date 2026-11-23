@@ -46,3 +46,8 @@ exploration/slm_fields/runs/*/adapter/
 exploration/slm_fields/runs/*/outputs.jsonl
 exploration/slm_fields/runs/*/prompts.jsonl
 exploration/slm_fields/runs/*/*.npz
+exploration/slm_fields/runs/mine-*/part*/
+exploration/slm_fields/runs/mine-*/smoke/
+exploration/slm_fields/runs/mine-*/out/
+exploration/slm_fields/runs/mine-*/state/
+exploration/slm_fields/runs/mine-*/labels.jsonl

@@ -1,0 +1,72 @@
+{
+  "documents": 499447,
+  "skipped_mined": 12711,
+  "parts": {
+    "part1": {
+      "documents": 166483,
+      "tokens": 399103330,
+      "shards": {
+        "shard_01.jsonl.gz": {
+          "documents": 50000,
+          "tokens": 119732196
+        },
+        "shard_02.jsonl.gz": {
+          "documents": 50000,
+          "tokens": 119735983
+        },
+        "shard_03.jsonl.gz": {
+          "documents": 50000,
+          "tokens": 119935692
+        },
+        "shard_04.jsonl.gz": {
+          "documents": 16483,
+          "tokens": 39699459
+        }
+      }
+    },
+    "part2": {
+      "documents": 166482,
+      "tokens": 399102130,
+      "shards": {
+        "shard_01.jsonl.gz": {
+          "documents": 50000,
+          "tokens": 119965983
+        },
+        "shard_02.jsonl.gz": {
+          "documents": 50000,
+          "tokens": 119761441
+        },
+        "shard_03.jsonl.gz": {
+          "documents": 50000,
+          "tokens": 119951781
+        },
+        "shard_04.jsonl.gz": {
+          "documents": 16482,
+          "tokens": 39422925
+        }
+      }
+    },
+    "part3": {
+      "documents": 166482,
+      "tokens": 399102129,
+      "shards": {
+        "shard_01.jsonl.gz": {
+          "documents": 50000,
+          "tokens": 119910736
+        },
+        "shard_02.jsonl.gz": {
+          "documents": 50000,
+          "tokens": 119861749
+        },
+        "shard_03.jsonl.gz": {
+          "documents": 50000,
+          "tokens": 119901629
+        },
+        "shard_04.jsonl.gz": {
+          "documents": 16482,
+          "tokens": 39428015
+        }
+      }
+    }
+  }
+}

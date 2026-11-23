@@ -2,7 +2,7 @@
 
 Status: brainstorm notes, 23 November 2026. Full design:
 [2026-11-23 evaluation update](../superpowers/specs/2026-11-23-evaluation-update-design.md).
-Todo card: [Prepare the evaluation for the final run](../todo/Prepare%20the%20evaluation%20for%20the%20final%20run.md).
+Todo card: [Run the final evaluation](../todo/Run%20the%20final%20evaluation.md).
 
 The benchmark evaluation (EnterpriseRAG-Bench, 500 questions, one gold answer, judged on
 correctness × completeness; last comparable result run 31, `hybrid-ft-rerank`, 77.6%) was
