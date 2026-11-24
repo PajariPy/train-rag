@@ -1,6 +1,6 @@
 Think through how the RAG should handle the way real people write at work. The benchmark's
 synthetic documents don't show that, so our results may not carry over to a real company's
-data.
+data. ^desc
 
 ## Why
 EnterpriseRAG-Bench was written by an LLM, mostly through a cheap pipeline where each
@@ -39,4 +39,4 @@ learn the generator's way of writing) and which should transfer (channel and sou
 filters, links, metadata).
 
 Related: [[Try HyDE and query rewriting]], the data preprocessing problem in the semantic search map
-(`docs/research/research_map.canvas`), brainstorm 006.
+(`docs/research/research_map.excalidraw`), brainstorm 006.

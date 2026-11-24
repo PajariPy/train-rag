@@ -1,5 +1,5 @@
 Track the RAG in production so problems show up early: per-request traces, and quality
-metrics from real chats.
+metrics from real chats. ^desc
 
 ## Why
 Offline tests don't show drift: new documents, new kinds of questions, a slower model. We need

@@ -1,4 +1,4 @@
-For the articles only: a map of where the project could go next, beyond the current todo.
+For the articles only: a map of where the project could go next, beyond the current todo. ^desc
 
 ## Why
 To close the article series with the open routes and what each would need.

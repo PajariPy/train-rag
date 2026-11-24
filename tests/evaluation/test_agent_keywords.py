@@ -40,7 +40,11 @@ def keyword_agent(
     base = FakeSnippetBase()
     client = cast(genai.Client, SimpleNamespace(models=models))
     system = KeywordAgentSystem(
-        base, client, UsageMeter(), max_semantic=max_semantic, max_keyword=max_keyword,
+        base,
+        client,
+        UsageMeter(),
+        max_semantic=max_semantic,
+        max_keyword=max_keyword,
         max_reads=max_reads,
     )
 

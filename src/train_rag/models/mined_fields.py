@@ -118,3 +118,14 @@ class FieldProfiles(BaseModel):
     subject: str
     problem: str
     names: str
+
+
+class FieldDocument(BaseModel):
+    """A document field search can find: its ids and the filters it matches."""
+
+    model_config = ConfigDict(frozen=True)
+
+    doc_id: str
+    document_id: int
+    source_type: str
+    channel: str = ""

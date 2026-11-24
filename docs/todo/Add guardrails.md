@@ -1,5 +1,5 @@
 Decide and test the guardrails around the RAG: what it must refuse, what it must never leak,
-and what it does with unsafe input.
+and what it does with unsafe input. ^desc
 
 ## Why
 Not explored yet. A company assistant reads private documents, so access rules, prompt

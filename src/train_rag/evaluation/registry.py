@@ -10,6 +10,7 @@ from train_rag.evaluation.agent import AgentSystem
 from train_rag.evaluation.agent_clarify import ClarifyingSnippetAgent
 from train_rag.evaluation.agent_keywords import KeywordAgentSystem
 from train_rag.evaluation.agent_snippets import SnippetAgentSystem
+from train_rag.evaluation.field_agent.retriever import FieldAgentRetriever
 from train_rag.evaluation.field_agent.system import ClarifyingFieldAgent, FieldAgentSystem
 from train_rag.evaluation.hybrid import PipelineRetriever
 from train_rag.evaluation.judge import AnswerJudge, GeminiJudge
@@ -106,4 +107,7 @@ RETRIEVERS: dict[str, RetrieverFactory] = {
             rerank_tokens=SHORT_TOKENS,
         )
     ),
+    # The accepted pipeline's agent (general + field search, the check), never asking and
+    # writing no answer: its final documents, then its other candidates. Gemini, paid.
+    FieldAgentRetriever.name: lambda _sample: FieldAgentRetriever.load(genai.Client(), USAGE),
 }

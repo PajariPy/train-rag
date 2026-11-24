@@ -26,9 +26,7 @@ def start_workflow(session: Session, name: str, steps: list[str]) -> str:
     now = datetime.now(UTC)
     key = f"{name} · {now:%Y-%m-%d %H:%M}"
     for position, step in enumerate(steps):
-        session.add(
-            WorkflowStepRecord(workflow=key, position=position, name=step, created_at=now)
-        )
+        session.add(WorkflowStepRecord(workflow=key, position=position, name=step, created_at=now))
     session.commit()
 
     return key
@@ -182,8 +180,11 @@ def latest_workflow_state(session: Session) -> WorkflowState | None:
             seconds = ((record.finished_at or now) - record.started_at).total_seconds()
         steps.append(
             StepState(
-                name=record.name, status=record.status, note=record.note,
-                seconds=seconds, run=state,
+                name=record.name,
+                status=record.status,
+                note=record.note,
+                seconds=seconds,
+                run=state,
             )
         )
     status = overall_status([step.status for step in steps])

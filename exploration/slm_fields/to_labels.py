@@ -48,12 +48,15 @@ def label_line(row: dict) -> dict:
     except ValueError:
         return {**line, "fields": {}, "labels": {}, "parse_error": True}
 
-    return {
-        **line,
-        "fields": parsed.get("fields") or {},
-        "labels": parsed.get("labels") or {},
-        "relations": parsed.get("relations") or [],
-    }
+    # Valid JSON can still have the wrong shape (3 Slack outputs wrote `labels` as a list):
+    # a part of the wrong type is left empty and the line is marked, the raw output kept.
+    parts = {"fields": dict, "labels": dict, "relations": list}
+    shaped = {key: parsed.get(key) or kind() for key, kind in parts.items()}
+    wrong = [key for key, kind in parts.items() if not isinstance(shaped[key], kind)]
+    for key in wrong:
+        shaped[key] = parts[key]()
+
+    return {**line, **shaped, **({"shape_error": wrong} if wrong else {})}
 
 
 def main() -> None:

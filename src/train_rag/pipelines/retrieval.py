@@ -297,4 +297,3 @@ class RetrievalPipeline:
     async def close(self) -> None:
         """Close the database connections."""
         await self.engine.dispose()
-

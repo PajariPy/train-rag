@@ -48,3 +48,30 @@ The SLM is ready ([[Train the Slack field extractor SLM]]):
    a few outputs per source read by hand.
 
 Paid: ask first. Then [[Run the final evaluation]].
+
+## Result (23 Nov)
+Mined: **all 511,958 documents** have SLM fields (499,447 mined now + 12,511 from the
+held-out scoring run). Labels file: `exploration/slm_fields/runs/mine-r16-e2/labels.jsonl`
+(3.8 GB, gitignored), raw output kept so a schema change re-parses, never re-mines.
+
+| | |
+|---|---|
+| Valid JSON | **99.6%**; every source 98.4% (Confluence) – 99.7% |
+| Output hit the 3,000-token limit | 1,574 (0.3%) |
+| Prompt cut at 5,000 tokens | 3,151 (0.6%), but **25.8% of Fireflies**: fixed in [[fix-cut-long-documents]] |
+| Speed | ≈ 5.7 documents/s per RTX 4090; 3 machines ≈ 8.5 h |
+| Cost | **$16.01** in all (smoke test, mining, 3 h idle wait per machine) |
+
+How: `build_corpus_prompts.py` (3 parts balanced by tokens, 4 shards each) →
+`vast_mine.sh launch` (machines run without the laptop, live page on each) → `fetch` →
+`to_labels.py`. PR #9.
+
+Lessons (also for `docs/vast_ai.md`):
+- A machine that stops itself can't be read until Vast starts it again, and that needs the
+  same host's GPU to be free: parts 1 and 3 waited 3–5 hours for it. Next time copy each
+  shard off the machine as it finishes and destroy instead of stop.
+- One host uploaded at 0.4 MB/s; `fetch` now compresses on the machine first (xz, ≈ 7×).
+- The 3 h wait after finishing cost ≈ $3.60; 1 h is enough.
+
+Import and embedding moved to [[import-embed-mined-fields]] (first task of
+[[Run the final evaluation]]), waiting for the local database.

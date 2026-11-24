@@ -7,7 +7,7 @@ Date: 2026-11-09. Status: draft for approval.
 46 semantic questions fail because search can't single out the right document among
 near-duplicates (run 15). Embedding changes, reranker settings, deeper lists and fact
 extraction have all been tried (articles 003–006, research map
-`docs/research/research_map.canvas`); the best end-to-end result
+`docs/research/research_map.excalidraw`); the best end-to-end result
 reaches 9 of 46. The question text alone often doesn't say enough.
 
 A real assistant would ask the person what they mean. Today's evaluation can't measure

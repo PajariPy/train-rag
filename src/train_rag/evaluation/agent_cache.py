@@ -37,9 +37,7 @@ class ConversationCache:
         self.name: str | None = None
         self.covered = 0  # how many leading turns of the conversation the cache holds
 
-    def store(
-        self, instructions: str, tools: types.Tool, contents: list[types.Content]
-    ) -> None:
+    def store(self, instructions: str, tools: types.Tool, contents: list[types.Content]) -> None:
         """Cache the conversation so far, replacing any older cache.
 
         Args:

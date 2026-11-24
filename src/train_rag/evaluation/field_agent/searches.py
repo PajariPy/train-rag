@@ -2,7 +2,7 @@
 
 `search_documents` is the accepted first search over the whole corpus (fine-tuned gte on the
 query, BM25 on the query with Gemini's rewrites appended, the union reranked on the first
-1,024 tokens). `search_fields` searches the mined fields (`FieldIndex`). Every document the
+1,024 tokens). `search_fields` searches the mined fields (`FieldSearch`). Every document the
 agent is shown gets a short id (`d1`, `d2`, ...) that stays the same for the conversation.
 """
 
@@ -12,7 +12,7 @@ from train_rag.evaluation.field_agent.cards import listing, result_card
 from train_rag.evaluation.field_agent.tools import SEARCH_DOCUMENTS, SHOWN
 from train_rag.evaluation.hybrid import to_hits
 from train_rag.fusion import reciprocal_rank_fusion
-from train_rag.mined_fields.index import PROFILE_COLUMNS, FieldIndex
+from train_rag.mined_fields.index import PROFILE_COLUMNS, FieldSearch
 from train_rag.mined_fields.schema import AREAS, SOURCE_KINDS
 from train_rag.models import SourceType
 from train_rag.models.field_agent import SearchRecord, ToolCall
@@ -78,7 +78,7 @@ class AgentSearches:
     """Runs the agent's searches for one question and remembers what they found."""
 
     def __init__(
-        self, retriever: DocumentSearch, index: FieldIndex, rewriter: QueryRewriter
+        self, retriever: DocumentSearch, index: FieldSearch, rewriter: QueryRewriter
     ) -> None:
         """Start with no searches.
 
@@ -207,7 +207,7 @@ class AgentSearches:
         profile = profile if profile in PROFILE_COLUMNS else "all"
         areas = [area for area in args.get("areas") or [] if area in AREAS]
         sources = [source for source in args.get("sources") or [] if source in SOURCE_KINDS]
-        known = set(self.index.channels)
+        known = self.index.channel_counts()
         channels = [
             str(name).lstrip("#")
             for name in args.get("channels") or []
@@ -219,14 +219,14 @@ class AgentSearches:
         name = f"search_fields {len(self.records) + 1}"
         self.rankings[name] = [
             SearchHit(
-                doc_id=self.index.doc_ids[position],
-                document_id=self.index.document_ids[position],
-                source_type=SourceType(self.index.sources[position]),
+                doc_id=document.doc_id,
+                document_id=document.document_id,
+                source_type=SourceType(document.source_type),
                 field="fields",
                 text="",
                 distance=float(rank),
             )
-            for rank, position in enumerate(found)
+            for rank, document in enumerate(found)
         ]
         self.records.append(
             SearchRecord(
@@ -239,7 +239,7 @@ class AgentSearches:
             )
         )
 
-        shown = [self.index.doc_ids[position] for position in found[:SHOWN]]
+        shown = [document.doc_id for document in found[:SHOWN]]
         texts = {hit.doc_id: hit.text for hit in self.retriever.read_documents(shown)}
         cards = [
             result_card(self.index, self.label(doc_id), doc_id, "", texts.get(doc_id, ""))

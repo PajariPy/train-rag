@@ -1,0 +1,50 @@
+{
+  "name": "aws_architecture",
+  "width": 1640,
+  "height": 1060,
+  "icons": "icons",
+  "boxes": [
+    {"x": 190, "y": 24, "w": 1150, "h": 1010, "title": "AWS Cloud · one region", "kind": "cloud"},
+    {"x": 250, "y": 222, "w": 545, "h": 590, "title": "VPC", "kind": "vpc"},
+    {"x": 865, "y": 222, "w": 240, "h": 590, "title": "Amazon SageMaker AI", "kind": "group", "color": "#01A88D"}
+  ],
+  "nodes": [
+    {"id": "sources", "x": 90, "y": 330, "icon": "aws-documents", "service": "Data sources", "role": "Jira, Slack, Fireflies …"},
+    {"id": "users", "x": 90, "y": 710, "icon": "aws-users", "service": "Users", "role": "Chat client"},
+    {"id": "eb", "x": 420, "y": 120, "icon": "aws-eventbridge-scheduler", "service": "EventBridge Scheduler", "role": "Nightly trigger"},
+    {"id": "sf", "x": 660, "y": 120, "icon": "aws-step-functions", "service": "AWS Step Functions", "role": "Ingestion workflow"},
+    {"id": "s3", "x": 1220, "y": 120, "icon": "aws-s3", "service": "Amazon S3", "role": "Raw changes, BM25 index"},
+    {"id": "nat", "x": 420, "y": 330, "icon": "aws-nat-gateway", "service": "NAT gateway", "role": "Outbound internet"},
+    {"id": "ingest", "x": 660, "y": 330, "icon": "aws-fargate", "service": "AWS Fargate", "role": "Ingestion task"},
+    {"id": "rds", "x": 660, "y": 520, "icon": "aws-rds", "service": "PostgreSQL (RDS or EC2)", "role": "Index database"},
+    {"id": "alb", "x": 420, "y": 710, "icon": "aws-alb", "service": "Application Load Balancer", "role": "Streaming endpoint"},
+    {"id": "query", "x": 660, "y": 710, "icon": "aws-fargate", "service": "AWS Fargate", "role": "Query service · 1 vCPU, 2 GB"},
+    {"id": "slm", "x": 985, "y": 330, "icon": "aws-model", "service": "Async endpoint", "role": "SLM field extractor"},
+    {"id": "gte", "x": 985, "y": 520, "icon": "aws-model", "service": "Real-time endpoint", "role": "gte embedder"},
+    {"id": "rerank", "x": 985, "y": 710, "icon": "aws-model", "service": "Real-time endpoint", "role": "gte reranker"},
+    {"id": "llm", "x": 1490, "y": 710, "icon": "aws-bedrock", "service": "Amazon Bedrock or Gemini", "role": "Answer LLM"},
+    {"id": "ecr", "x": 420, "y": 950, "icon": "aws-ecr", "service": "Amazon ECR", "role": "Container images"},
+    {"id": "cw", "x": 660, "y": 950, "icon": "aws-cloudwatch", "service": "Amazon CloudWatch", "role": "Logs, metrics, alarms"},
+    {"id": "secrets", "x": 900, "y": 950, "icon": "aws-secrets-manager", "service": "AWS Secrets Manager", "role": "API keys"}
+  ],
+  "edges": [
+    {"from": "eb:right", "to": "sf:left"},
+    {"from": "sf:bottom", "to": "ingest:top"},
+    {"from": "ingest:left", "to": "nat:right", "both": true},
+    {"from": "nat:left", "to": "sources:right", "both": true},
+    {"from": "ingest:right-20", "to": "s3:bottom-20", "via": [[825, 310], [825, 204], [1200, 204]]},
+    {"from": "ingest:right", "to": "slm:left", "both": true},
+    {"from": "ingest:right+20", "to": "gte:left-15", "both": true, "via": [[845, 350], [845, 505]]},
+    {"from": "ingest:bottom", "to": "rds:top", "both": true},
+    {"from": "users:right", "to": "alb:left", "both": true},
+    {"from": "alb:right", "to": "query:left", "both": true},
+    {"from": "rds:bottom", "to": "query:top", "both": true},
+    {"from": "query:right-20", "to": "gte:left+15", "both": true, "via": [[825, 690], [825, 535]]},
+    {"from": "query:right", "to": "rerank:left", "both": true},
+    {"from": "s3:bottom+20", "to": "query:bottom+20", "via": [[1240, 840], [680, 840]]},
+    {"from": "query:bottom-20", "to": "llm:bottom", "both": true, "via": [[640, 870], [1490, 870]]}
+  ],
+  "notes": [
+    {"x": 1060, "y": 950, "text": "used by all services"}
+  ]
+}

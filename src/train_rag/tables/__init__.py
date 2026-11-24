@@ -9,6 +9,7 @@ from train_rag.tables.embedding import (
     tables_for,
 )
 from train_rag.tables.evaluation import EvalResultRecord, EvalRunRecord
+from train_rag.tables.field_search import FieldSearchRecord
 from train_rag.tables.field_vector import FieldVectorRecord
 from train_rag.tables.inferred_attendees import InferredAttendeesRecord
 from train_rag.tables.inferred_date import InferredDateRecord
@@ -27,6 +28,7 @@ __all__ = [
     "EmbeddingRecord",
     "EvalResultRecord",
     "EvalRunRecord",
+    "FieldSearchRecord",
     "FieldVectorRecord",
     "InferredAttendeesRecord",
     "InferredDateRecord",

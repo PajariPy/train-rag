@@ -1,3 +1,7 @@
 {
-  "showRibbon": true
+  "showRibbon": true,
+  "theme": "obsidian",
+  "enabledCssSnippets": [
+    "canvas-edge-labels"
+  ]
 }

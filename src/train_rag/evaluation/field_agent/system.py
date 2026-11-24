@@ -25,7 +25,8 @@ from train_rag.evaluation.person import Person
 from train_rag.evaluation.pipeline_answer import answer_from_hits
 from train_rag.evaluation.system import ClarifyingSystem
 from train_rag.evaluation.usage import UsageMeter
-from train_rag.mined_fields.index import FieldIndex
+from train_rag.mined_fields.index import FieldSearch
+from train_rag.mined_fields.stored import StoredFieldIndex
 from train_rag.models.evaluation import SystemAnswer
 from train_rag.pipelines.retrieval import RetrievalPipeline
 from train_rag.prompts import prompt
@@ -44,7 +45,7 @@ class FieldAgentSystem(ClarifyingSystem):
     def __init__(
         self,
         retriever: DocumentSearch,
-        index: FieldIndex,
+        index: FieldSearch,
         client: genai.Client,
         usage: UsageMeter,
     ) -> None:
@@ -70,7 +71,7 @@ class FieldAgentSystem(ClarifyingSystem):
 
     @classmethod
     def load(cls, client: genai.Client, usage: UsageMeter) -> "FieldAgentSystem":
-        """Load the pipeline (union rerank on 1,024 tokens) and the field index.
+        """Load the pipeline (union rerank on 1,024 tokens) and field search (in Postgres).
 
         Both search with the same fine-tuned gte.
 
@@ -85,7 +86,7 @@ class FieldAgentSystem(ClarifyingSystem):
         pipeline = RetrievalPipeline.load(embedder=embedder, union=True, rerank_tokens=SHORT_TOKENS)
 
         return cls(
-            PipelineRetriever(pipeline), FieldIndex.load(get_engine(), embedder), client, usage
+            PipelineRetriever(pipeline), StoredFieldIndex(get_engine(), embedder), client, usage
         )
 
     def answer(self, question: str) -> SystemAnswer:
@@ -121,6 +122,22 @@ class FieldAgentSystem(ClarifyingSystem):
         Returns:
             The answer, the final documents and the agent's trace.
         """
+        run = self.search(question, person).run
+        note = prompt("side_by_side_note") if run.side_by_side else ""
+        answer = answer_from_hits(self.client, self.usage, question, run.documents, note)
+
+        return answer.model_copy(update={"trace": run.trace})
+
+    def search(self, question: str, person: Person | None) -> AgentLoop:
+        """Let the agent search and check, without writing an answer.
+
+        Args:
+            question: The question text.
+            person: Who to ask, or None.
+
+        Returns:
+            The finished loop: its run (final documents, trace), searches and rerank scores.
+        """
         asks = self.max_asks if person is not None else 0
         chat = GeminiChat(
             self.client,
@@ -131,13 +148,11 @@ class FieldAgentSystem(ClarifyingSystem):
         )
 
         searches = AgentSearches(self.retriever, self.index, self.rewriter)
-        run = AgentLoop(chat, searches, question, person, asks).execute()
-        self.usage.add_searches(len(run.searches))
+        loop = AgentLoop(chat, searches, question, person, asks)
+        loop.execute()
+        self.usage.add_searches(len(loop.run.searches))
 
-        note = prompt("side_by_side_note") if run.side_by_side else ""
-        answer = answer_from_hits(self.client, self.usage, question, run.documents, note)
-
-        return answer.model_copy(update={"trace": run.trace})
+        return loop
 
 
 class ClarifyingFieldAgent(FieldAgentSystem):
