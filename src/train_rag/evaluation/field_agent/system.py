@@ -31,7 +31,6 @@ from train_rag.models.evaluation import SystemAnswer
 from train_rag.pipelines.retrieval import RetrievalPipeline
 from train_rag.prompts import prompt
 from train_rag.query_rewrite import QueryRewriter
-from train_rag.reranker import SHORT_TOKENS
 
 MAX_ASKS = 2
 
@@ -83,7 +82,7 @@ class FieldAgentSystem(ClarifyingSystem):
             The ready system.
         """
         embedder = FineTunedGteEmbedder()
-        pipeline = RetrievalPipeline.load(embedder=embedder, union=True, rerank_tokens=SHORT_TOKENS)
+        pipeline = RetrievalPipeline.load(embedder=embedder, union=True)
 
         return cls(
             PipelineRetriever(pipeline), StoredFieldIndex(get_engine(), embedder), client, usage
