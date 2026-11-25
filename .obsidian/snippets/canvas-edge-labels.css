@@ -1,0 +1,7 @@
+/* Edge labels scale with the canvas, like box text, instead of keeping one size on screen.
+   Obsidian multiplies label size by --zoom-multiplier, so zoomed out they grow over the boxes. */
+.canvas-path-label {
+  font-size: var(--font-ui-medium);
+  padding: var(--size-2-2) var(--size-2-3);
+  max-width: 17em;
+}

@@ -1,10 +1,14 @@
 """Field search: compare a query with the mined-field profiles of every mined document.
 
-The profiles' unit vectors are held in memory (documents x 3 x 768, float32: about 240 MB
-for the ~26k documents mined so far). A query is embedded with the same fine-tuned gte and
-scored by cosine similarity with one profile, or the sum of all three; filters on areas,
-sources and Slack channels drop documents before ranking. Only mined documents can be
-found: the rest of the corpus is reached through the general search.
+A query is embedded with the same fine-tuned gte and scored by cosine similarity with one
+profile (subject, problem, names), or the sum of all three; filters on areas, sources and
+Slack channels drop documents before ranking. Only mined documents can be found: the rest
+of the corpus is reached through the general search.
+
+`FieldSearch` is what the agent uses. Two implementations:
+- `StoredFieldIndex` (`mined_fields.stored`): the whole corpus, searched in Postgres with
+  StreamingDiskANN indexes; nothing is loaded into memory;
+- `FieldIndex` (here): a small set held in numpy, exact; for tests and experiments.
 
 When a document has rows from several extractors, the one earliest in
 `EXTRACTOR_PREFERENCE` is used, so importing the SLM's output (extractor `slm-<run>`)
@@ -14,16 +18,14 @@ switches search to it without code changes.
 import threading
 from collections import Counter
 from collections.abc import Sequence
+from typing import Protocol
 
 import numpy as np
 import numpy.typing as npt
-from sqlalchemy import Engine
-from sqlmodel import Session
 
 from train_rag.embedder import Embedder
 from train_rag.mined_fields.profiles import PROFILES
-from train_rag.models.mined_fields import MinedFields
-from train_rag.repository.document_fields import load_document_fields, profile_matrices
+from train_rag.models.mined_fields import FieldDocument, MinedFields
 from train_rag.tables import DocumentFieldsRecord
 from train_rag.tables.field_vector import PROFILE_DIMENSIONS
 
@@ -37,6 +39,77 @@ PROFILE_COLUMNS["all"] = (0, 1, 2)
 
 # A mined document's fields and its (3, dimensions) profile matrix.
 FieldRow = tuple[DocumentFieldsRecord, npt.NDArray[np.float32]]
+
+
+class FieldSearch(Protocol):
+    """What the agent needs from field search."""
+
+    def __len__(self) -> int:
+        """Count the mined documents.
+
+        Returns:
+            Their number.
+        """
+        ...
+
+    def area_counts(self) -> Counter[str]:
+        """Count the documents per area.
+
+        Returns:
+            Documents per area.
+        """
+        ...
+
+    def source_counts(self) -> Counter[str]:
+        """Count the documents per source.
+
+        Returns:
+            Documents per source.
+        """
+        ...
+
+    def channel_counts(self) -> Counter[str]:
+        """Count the chat threads per Slack channel.
+
+        Returns:
+            Threads per channel.
+        """
+        ...
+
+    def search(
+        self,
+        query: str,
+        profile: str,
+        areas: Sequence[str] = (),
+        sources: Sequence[str] = (),
+        channels: Sequence[str] = (),
+        limit: int = KEPT,
+    ) -> list[FieldDocument]:
+        """Rank the mined documents by how close a profile is to the query.
+
+        Args:
+            query: The search text.
+            profile: `subject`, `problem`, `names` or `all` (the three summed).
+            areas: Keep documents with any of these areas; empty keeps all.
+            sources: Keep documents of these sources; empty keeps all.
+            channels: Keep chat threads of these channels; empty keeps all.
+            limit: Documents returned.
+
+        Returns:
+            The documents, best first.
+        """
+        ...
+
+    def card(self, doc_id: str) -> tuple[FieldDocument, MinedFields] | None:
+        """Look up a document's mined fields for its result card.
+
+        Args:
+            doc_id: The document.
+
+        Returns:
+            The document and its mined fields, or None when it wasn't mined.
+        """
+        ...
 
 
 def preference(extractor: str) -> int:
@@ -77,21 +150,26 @@ def preferred_rows(rows: Sequence[FieldRow]) -> list[FieldRow]:
 
 
 class FieldIndex:
-    """The mined documents' profiles, searchable by a query text."""
+    """A small set of mined documents held in memory, searched exactly."""
 
     def __init__(self, rows: Sequence[FieldRow], embedder: Embedder) -> None:
         """Hold the preferred row of every mined document.
 
         Args:
-            rows: Mined fields with their profile matrices, of any extractors.
+            rows: Mined fields with their (3, dimensions) profile matrices, any extractors.
             embedder: The model that embedded the profiles; it embeds the queries.
         """
         kept = preferred_rows(rows)
-        self.doc_ids = [fields.doc_id for fields, _ in kept]
-        self.document_ids = [fields.document_id for fields, _ in kept]
-        self.sources = [fields.source_type for fields, _ in kept]
-        self.channels = [fields.channel or "" for fields, _ in kept]
-        self.areas = [set(fields.areas) for fields, _ in kept]
+        self.documents = [
+            FieldDocument(
+                doc_id=fields.doc_id,
+                document_id=fields.document_id,
+                source_type=fields.source_type,
+                channel=fields.channel or "",
+            )
+            for fields, _ in kept
+        ]
+        self.areas = [frozenset(fields.areas) for fields, _ in kept]
         self.mined = [
             MinedFields(fields=fields.fields, thread_kind=fields.thread_kind, areas=fields.areas)
             for fields, _ in kept
@@ -101,30 +179,9 @@ class FieldIndex:
             if kept
             else np.zeros((0, len(PROFILES), PROFILE_DIMENSIONS), dtype=np.float32)
         )
-        self.position = {doc_id: index for index, doc_id in enumerate(self.doc_ids)}
+        self.position = {document.doc_id: index for index, document in enumerate(self.documents)}
         self.embedder = embedder
         self.lock = threading.Lock()  # one model shared by the evaluation's worker threads
-
-    @classmethod
-    def load(cls, engine: Engine, embedder: Embedder) -> "FieldIndex":
-        """Load every mined document with vectors from the embedder.
-
-        Args:
-            engine: Database engine.
-            embedder: The model the profile vectors come from.
-
-        Returns:
-            The index.
-        """
-        with Session(engine) as session:
-            matrices = profile_matrices(session, embedder.name)
-            rows = [
-                (fields, matrices[fields.id])
-                for fields in load_document_fields(session)
-                if fields.id in matrices
-            ]
-
-        return cls(rows, embedder)
 
     def __len__(self) -> int:
         """Count the mined documents.
@@ -132,7 +189,7 @@ class FieldIndex:
         Returns:
             Their number.
         """
-        return len(self.doc_ids)
+        return len(self.documents)
 
     def area_counts(self) -> Counter[str]:
         """Count the documents per area.
@@ -148,7 +205,7 @@ class FieldIndex:
         Returns:
             Documents per source.
         """
-        return Counter(self.sources)
+        return Counter(document.source_type for document in self.documents)
 
     def channel_counts(self) -> Counter[str]:
         """Count the chat threads per Slack channel.
@@ -156,7 +213,7 @@ class FieldIndex:
         Returns:
             Threads per channel.
         """
-        return Counter(channel for channel in self.channels if channel)
+        return Counter(document.channel for document in self.documents if document.channel)
 
     def search(
         self,
@@ -166,7 +223,7 @@ class FieldIndex:
         sources: Sequence[str] = (),
         channels: Sequence[str] = (),
         limit: int = KEPT,
-    ) -> list[int]:
+    ) -> list[FieldDocument]:
         """Rank the mined documents by how close a profile is to the query.
 
         Args:
@@ -178,7 +235,7 @@ class FieldIndex:
             limit: Documents returned.
 
         Returns:
-            Positions in the index, best first.
+            The documents, best first.
         """
         with self.lock:
             vector = np.asarray(self.embedder.embed([query])[0], dtype=np.float32)
@@ -192,8 +249,25 @@ class FieldIndex:
             allowed = set(areas)
             scores[[not found & allowed for found in self.areas]] = -np.inf
         if sources:
-            scores[[source not in sources for source in self.sources]] = -np.inf
+            scores[[document.source_type not in sources for document in self.documents]] = -np.inf
         if channels:
-            scores[[channel not in channels for channel in self.channels]] = -np.inf
+            scores[[document.channel not in channels for document in self.documents]] = -np.inf
 
-        return [int(index) for index in np.argsort(-scores)[:limit] if np.isfinite(scores[index])]
+        ranked = [int(index) for index in np.argsort(-scores)[:limit] if np.isfinite(scores[index])]
+
+        return [self.documents[index] for index in ranked]
+
+    def card(self, doc_id: str) -> tuple[FieldDocument, MinedFields] | None:
+        """Look up a document's mined fields for its result card.
+
+        Args:
+            doc_id: The document.
+
+        Returns:
+            The document and its mined fields, or None when it wasn't mined.
+        """
+        position = self.position.get(doc_id)
+        if position is None:
+            return None
+
+        return self.documents[position], self.mined[position]

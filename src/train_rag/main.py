@@ -66,6 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--sample", type=int, help="sample size the BM25 index was built for")
     search.add_argument("--question-type", type=QuestionType, choices=list(QuestionType))
     search.add_argument("--limit", type=int, help="evaluate only the first N questions")
+    search.add_argument("--log", type=Path, help="field-agent only: JSON Lines run per question")
     scoring = commands.add_parser("evaluate", help="score a RAG system on the benchmark")
     scoring.add_argument("--system", choices=sorted(SYSTEMS), required=True)
     scoring.add_argument("--judge", choices=sorted(JUDGES), default="gemini")
@@ -116,7 +117,7 @@ def main() -> None:
     if args.command == "workflow":
         run_workflow_command(args)
 
-    if args.command in ("import-fields", "embed-fields"):
+    if args.command in ("import-fields", "embed-fields", "index-fields"):
         run_field_command(args)
 
     if args.command == "index-bm25":
@@ -133,7 +134,7 @@ def main() -> None:
             print(f"    {document.doc_id} · {rerank}rrf {document.score:.4f} · {ranks}")
 
     if args.command == "evaluate-search":
-        evaluate_search(args.retriever, args.question_type, args.limit, args.sample)
+        evaluate_search(args.retriever, args.question_type, args.limit, args.sample, args.log)
 
     if args.command == "evaluate":
         evaluate(

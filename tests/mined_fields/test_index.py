@@ -7,6 +7,7 @@ import numpy as np
 
 from train_rag.embedder import Embedder
 from train_rag.mined_fields.index import FieldIndex, preferred_rows
+from train_rag.models.mined_fields import FieldDocument
 from train_rag.tables import DocumentFieldsRecord
 
 DIMENSIONS = 768
@@ -105,44 +106,43 @@ def index() -> FieldIndex:
     return FieldIndex(rows, AxisEmbedder())
 
 
-def doc_ids(found: list[int], field_index: FieldIndex) -> list[str]:
-    """Turn index positions into dataset ids.
+def doc_ids(found: list[FieldDocument]) -> list[str]:
+    """Turn found documents into dataset ids.
 
     Args:
-        found: Positions, best first.
-        field_index: The index.
+        found: Documents, best first.
 
     Returns:
         The dataset ids.
     """
-    return [field_index.doc_ids[position] for position in found]
+    return [document.doc_id for document in found]
 
 
 def test_profile_picks_the_compared_vector() -> None:
     """A subject search matches subjects only; an empty profile scores zero."""
     field_index = index()
     found = field_index.search("axis 0", "subject", limit=2)
-    assert doc_ids(found, field_index) == ["d1", "d2"]
-    assert doc_ids(field_index.search("axis 3", "names", limit=2), field_index) == ["d2", "d3"]
+    assert doc_ids(found) == ["d1", "d2"]
+    assert doc_ids(field_index.search("axis 3", "names", limit=2)) == ["d2", "d3"]
 
 
 def test_all_sums_the_three_profiles() -> None:
     """With "all", a document matching on two profiles beats one matching on one."""
     rows = [row(1, (7, None, None), []), row(2, (7, 7, None), []), row(3, (None, None, 7), [])]
     field_index = FieldIndex(rows, AxisEmbedder())
-    assert doc_ids(field_index.search("axis 7", "all"), field_index)[0] == "d2"
-    assert doc_ids(field_index.search("axis 7", "names", limit=1), field_index) == ["d3"]
+    assert doc_ids(field_index.search("axis 7", "all"))[0] == "d2"
+    assert doc_ids(field_index.search("axis 7", "names", limit=1)) == ["d3"]
 
 
 def test_filters_drop_documents() -> None:
     """Areas match any of the document's areas; sources and channels must match exactly."""
     field_index = index()
     by_area = field_index.search("axis 0", "subject", areas=["legal"])
-    assert doc_ids(by_area, field_index) == ["d3"]
+    assert doc_ids(by_area) == ["d3"]
     by_source = field_index.search("axis 0", "subject", sources=["gmail"])
-    assert doc_ids(by_source, field_index) == ["d2"]
+    assert doc_ids(by_source) == ["d2"]
     by_channel = field_index.search("axis 0", "subject", channels=["billing", "legal"])
-    assert set(doc_ids(by_channel, field_index)) == {"d1", "d3"}
+    assert set(doc_ids(by_channel)) == {"d1", "d3"}
 
 
 def test_counts_for_the_prompt() -> None:
@@ -166,3 +166,14 @@ def test_slm_rows_are_preferred_then_the_newest() -> None:
         (1, "slm-run2"),
         (2, "deepseek-a"),
     ]
+
+
+def test_card_shows_the_mined_fields_of_indexed_documents_only() -> None:
+    """A mined document has its source, channel and fields; any other has no card."""
+    field_index = index()
+    found = field_index.card("d1")
+    assert found is not None
+    document, mined = found
+    assert (document.source_type, document.channel) == ("slack", "billing")
+    assert mined.fields["topic"] == ["topic 1"]
+    assert field_index.card("unknown") is None

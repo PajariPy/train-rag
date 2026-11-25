@@ -15,7 +15,7 @@ Linear ticket description), or attributes the question states (source, date, cus
 
 ## How
 Per source, in the data preprocessing problem (the second problem in
-`docs/research/research_map.canvas`, linked from step 12):
+`docs/research/research_map.excalidraw`, linked from step 12):
 - **Linear (step 1):** 99.96% of tickets have a description, a short summary written by the
   source itself. Idea: search the descriptions, then open the full ticket. But the
   description holds the answer in only 25 of the 58 Linear questions.
@@ -27,7 +27,7 @@ Per source, in the data preprocessing problem (the second problem in
 - Next sources: Gmail, Jira, Confluence, the rest.
 
 Related: [[Approach human-style data problems]], the document growth map
-(document growth problem in `docs/research/research_map.canvas`, the bucketing idea),
+(document growth problem in `docs/research/research_map.excalidraw`, the bucketing idea),
 `docs/brainstorm/006_semantic_failures_up_close.md`.
 
 ## Decision (16 Nov)

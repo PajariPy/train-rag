@@ -10,6 +10,7 @@ from train_rag.data_loaders import EnterpriseRagBenchLoader
 from train_rag.database import create_tables, get_engine
 from train_rag.evaluation import format_report, run_evaluation
 from train_rag.evaluation.clarify_report import missing_memories
+from train_rag.evaluation.field_agent.retriever import FieldAgentRetriever
 from train_rag.evaluation.person import Person, SimulatedPerson
 from train_rag.evaluation.pipeline import PersonFactory
 from train_rag.evaluation.registry import (
@@ -126,16 +127,23 @@ def evaluate_search(
     question_type: QuestionType | None = None,
     limit: int | None = None,
     sample: int | None = None,
+    log: Path | None = None,
 ) -> None:
-    """Measure how many expected documents a retriever finds, without an LLM.
+    """Measure how many expected documents a retriever finds (only `field-agent` calls an LLM).
 
     Args:
         retriever_name: Name of a retriever in `RETRIEVERS`.
         question_type: Only questions of this type, or None for all.
         limit: Maximum number of questions, or None for all.
         sample: Sample size the BM25 index was built for, or None for the whole corpus.
+        log: JSON Lines file for the field agent's run per question, or None.
     """
+    load_dotenv(ENV_FILE)  # the field agent calls Gemini
     retriever = RETRIEVERS[retriever_name](sample)
+    if log is not None:
+        if not isinstance(retriever, FieldAgentRetriever):
+            raise ValueError("--log is only for the field-agent retriever")
+        retriever.log_to(log)
     with Session(get_engine()) as session:
         questions = load_questions(session, EnterpriseRagBenchLoader.name, question_type, limit)
     indexed = retriever.searchable_doc_ids()
@@ -149,3 +157,5 @@ def evaluate_search(
             progress=lambda _done, _total: progress.advance("retrieving", 1),
         )
     print(format_retrieval_report(f"{retriever_name} over {len(indexed):,} documents", metrics))
+    if USAGE.calls:  # an agent retriever pays for its Gemini turns
+        print(USAGE.report())

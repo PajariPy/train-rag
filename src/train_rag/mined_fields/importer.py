@@ -24,8 +24,57 @@ BATCH_SIZE = 500
 QUESTION_PREFIX = "question:"
 
 
+def label_offsets(path: Path, prompt_key: str | None) -> list[int]:
+    """Find where each document's line starts, reading the file once without keeping it.
+
+    A labels file can hold the whole corpus (3.8 GB for the SLM's 512k documents), so only
+    the byte offset of each id's last line is kept; `read_labels` reads the lines back.
+
+    Args:
+        path: The JSONL file.
+        prompt_key: Keep only lines whose key ends with this prompt hash, or None for all.
+
+    Returns:
+        Byte offsets of the kept lines, in file order; the last line wins for a repeated id.
+    """
+    offsets: dict[str, int] = {}
+    with path.open("rb") as file:
+        position = 0
+        for line in file:
+            start, position = position, position + len(line)
+            if not line.strip():
+                continue
+
+            head = json.loads(line)
+            row_id, key = str(head.get("id", "")), str(head.get("key", ""))
+            if row_id.startswith(QUESTION_PREFIX):
+                continue
+            if prompt_key is not None and not key.endswith(prompt_key):
+                continue
+
+            offsets[row_id] = start
+
+    return sorted(offsets.values())
+
+
+def lines_at(path: Path, offsets: list[int]) -> Iterator[LabelLine]:
+    """Read the lines that start at the given byte offsets.
+
+    Args:
+        path: The JSONL file.
+        offsets: Byte offsets from `label_offsets`.
+
+    Yields:
+        One parsed line per offset, in the order given.
+    """
+    with path.open("rb") as file:
+        for offset in offsets:
+            file.seek(offset)
+            yield LabelLine.model_validate(json.loads(file.readline()))
+
+
 def read_labels(path: Path, prompt_key: str | None) -> Iterator[LabelLine]:
-    """Read the document lines of a labels file.
+    """Read the document lines of a labels file, one at a time.
 
     Args:
         path: The JSONL file.
@@ -34,21 +83,7 @@ def read_labels(path: Path, prompt_key: str | None) -> Iterator[LabelLine]:
     Yields:
         One line per labelled document, as written; the last line wins for a repeated id.
     """
-    rows: dict[str, LabelLine] = {}
-    with path.open() as file:
-        for line in file:
-            if not line.strip():
-                continue
-
-            row = LabelLine.model_validate(json.loads(line))
-            if row.id.startswith(QUESTION_PREFIX):
-                continue
-            if prompt_key is not None and not row.key.endswith(prompt_key):
-                continue
-
-            rows[row.id] = row
-
-    yield from rows.values()
+    yield from lines_at(path, label_offsets(path, prompt_key))
 
 
 def field_records(
@@ -105,15 +140,16 @@ def import_fields(
     Returns:
         The number of rows stored.
     """
-    rows = list(read_labels(path, prompt_key))
+    offsets = label_offsets(path, prompt_key)
     stored = 0
     title = f"import mined fields: {extractor} from {path.name}"
 
-    with RunProgress(engine, title, len(rows)) as progress, Session(engine) as session:
-        for batch in batched(rows, BATCH_SIZE, strict=False):
+    with RunProgress(engine, title, len(offsets)) as progress, Session(engine) as session:
+        for batch_offsets in batched(offsets, BATCH_SIZE, strict=False):
+            batch = list(lines_at(path, list(batch_offsets)))
             keys = document_keys(session, dataset, [row.id for row in batch])
             ids = [document_id for found in keys.values() for document_id, _ in found]
-            records = field_records(list(batch), keys, slack_channels(session, ids), extractor)
+            records = field_records(batch, keys, slack_channels(session, ids), extractor)
 
             upsert_document_fields(session, records)
             stored += len(records)

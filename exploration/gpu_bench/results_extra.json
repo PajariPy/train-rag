@@ -1,0 +1,38 @@
+{
+ "query_embedding_cpu": {
+  "threads_1": {
+   "ms_per_question": 1771.6351129166771,
+   "questions_per_s": 0.5644503163824071
+  },
+  "threads_2": {
+   "ms_per_question": 968.6978919333342,
+   "questions_per_s": 1.0323135916030466
+  },
+  "threads_4": {
+   "ms_per_question": 745.6901612166499,
+   "questions_per_s": 1.3410395523637113
+  }
+ },
+ "rerank_settings_gpu": {
+  "50_docs_512_tokens": {
+   "ms_per_question_median": 616.2478709993593,
+   "questions_per_s": 1.602026942802856,
+   "pairs_per_s": 80.1013471401428
+  },
+  "100_docs_512_tokens": {
+   "ms_per_question_median": 1184.5336359983776,
+   "questions_per_s": 0.8438627378864053,
+   "pairs_per_s": 84.38627378864052
+  },
+  "50_docs_1024_tokens": {
+   "ms_per_question_median": 1366.074394500174,
+   "questions_per_s": 0.7336289495829824,
+   "pairs_per_s": 36.68144747914912
+  },
+  "100_docs_1024_tokens": {
+   "ms_per_question_median": 2653.8342544954503,
+   "questions_per_s": 0.3749708159160143,
+   "pairs_per_s": 37.49708159160143
+  }
+ }
+}

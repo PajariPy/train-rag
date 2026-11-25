@@ -2,7 +2,7 @@
 
 Status: analysis notes for the brainstorm, 16 November 2026. Follows the 16 November decision in
 [article 006](../articles/006_first_lora_and_checking_the_labels.md) and step 12d of the
-[research map](../research/research_map.canvas).
+[research map](../research/research_map.excalidraw).
 
 **Setup:** today's best one, on the benchmark's 125 semantic questions:
 - fine-tuned gte searches with the question, top 50;

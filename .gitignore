@@ -51,3 +51,12 @@ exploration/slm_fields/runs/mine-*/smoke/
 exploration/slm_fields/runs/mine-*/out/
 exploration/slm_fields/runs/mine-*/state/
 exploration/slm_fields/runs/mine-*/labels.jsonl
+
+# Dev reranking set: candidates, scores and texts (large, rebuilt by build.py)
+!exploration/reranker_dev/data/
+exploration/reranker_dev/data/*
+!exploration/reranker_dev/data/summary.json
+!exploration/reranker_dev/data/answered_summary.json
+!exploration/reranker_dev/data/deep_summary.json
+!exploration/reranker_dev/data/deep_answered_summary.json
+exploration/reranker_dev/data-smoke/

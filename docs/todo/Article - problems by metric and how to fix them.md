@@ -1,4 +1,4 @@
-For the articles only: a guide from symptoms in the metrics to causes and fixes.
+For the articles only: a guide from symptoms in the metrics to causes and fixes. ^desc
 
 ## Why
 Our runs show patterns worth writing down: right document never reaches the reranker (reach),

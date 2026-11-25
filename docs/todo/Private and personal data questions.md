@@ -1,5 +1,5 @@
 Describe in the article how the assistant should handle questions about personal or private
-data the connected tools don't hold (salary, vacation days, HR records, someone's health).
+data the connected tools don't hold (salary, vacation days, HR records, someone's health). ^desc
 
 ## Why
 EnterpriseRAG-Bench has no such data, so the off-topic set can't test it (see

@@ -1,0 +1,109 @@
+{
+ "server": {
+  "ok": true,
+  "load_seconds": 3.9,
+  "mmap": true,
+  "documents": 511962
+ },
+ "rows": [
+  {
+   "users": 1,
+   "questions_per_s": 0.16666666666666666,
+   "ttft_p50": 2.7565882205963135,
+   "ttft_p95": 2.78552508354187,
+   "total_p50": 5.77256965637207,
+   "total_p95": 5.7968363761901855,
+   "errors": 0,
+   "error_rate": 0.0,
+   "cpu_cores": 0.012836052883429828,
+   "memory_max_mib": 649.4765625,
+   "bm25_avg_ms": 54.20376685651718,
+   "loop_lag_max_ms": 5.072256003040815
+  },
+  {
+   "users": 10,
+   "questions_per_s": 1.6666666666666667,
+   "ttft_p50": 2.763514280319214,
+   "ttft_p95": 2.8118906021118164,
+   "total_p50": 5.781224966049194,
+   "total_p95": 5.828001260757446,
+   "errors": 0,
+   "error_rate": 0.0,
+   "cpu_cores": 0.08686115175213227,
+   "memory_max_mib": 968.24609375,
+   "bm25_avg_ms": 64.66320151438205,
+   "loop_lag_max_ms": 9.163005996379065
+  },
+  {
+   "users": 25,
+   "questions_per_s": 4.166666666666667,
+   "ttft_p50": 2.744450092315674,
+   "ttft_p95": 2.77392840385437,
+   "total_p50": 5.762461423873901,
+   "total_p95": 5.7914838790893555,
+   "errors": 0,
+   "error_rate": 0.0,
+   "cpu_cores": 0.18181908912075737,
+   "memory_max_mib": 1216.22265625,
+   "bm25_avg_ms": 107.49107513115243,
+   "loop_lag_max_ms": 8.937024997430848
+  },
+  {
+   "users": 50,
+   "questions_per_s": 8.333333333333334,
+   "ttft_p50": 2.76716947555542,
+   "ttft_p95": 2.947552442550659,
+   "total_p50": 5.788720369338989,
+   "total_p95": 5.970222234725952,
+   "errors": 0,
+   "error_rate": 0.0,
+   "cpu_cores": 0.37280063443549316,
+   "memory_max_mib": 1278.8515625,
+   "bm25_avg_ms": 161.24182252292354,
+   "loop_lag_max_ms": 10.99756300245644
+  },
+  {
+   "users": 100,
+   "questions_per_s": 17.0,
+   "ttft_p50": 2.770798683166504,
+   "ttft_p95": 3.129812717437744,
+   "total_p50": 5.797158718109131,
+   "total_p95": 6.1580023765563965,
+   "errors": 0,
+   "error_rate": 0.0,
+   "cpu_cores": 0.7248862337649679,
+   "memory_max_mib": 1330.53125,
+   "bm25_avg_ms": 220.2700278883534,
+   "loop_lag_max_ms": 14.432329995906906
+  },
+  {
+   "users": 200,
+   "questions_per_s": 24.933333333333334,
+   "ttft_p50": 5.148823022842407,
+   "ttft_p95": 5.431727886199951,
+   "total_p50": 8.179240703582764,
+   "total_p95": 8.46447229385376,
+   "errors": 0,
+   "error_rate": 0.0,
+   "cpu_cores": 0.9998847991518314,
+   "memory_max_mib": 1368.59375,
+   "bm25_avg_ms": 942.9323789959118,
+   "loop_lag_max_ms": 36.519801999384065
+  },
+  {
+   "users": 300,
+   "questions_per_s": 25.6,
+   "ttft_p50": 8.772939443588257,
+   "ttft_p95": 9.268491268157959,
+   "total_p50": 11.798948049545288,
+   "total_p95": 12.301572561264038,
+   "errors": 0,
+   "error_rate": 0.0,
+   "cpu_cores": 0.999624121378848,
+   "memory_max_mib": 1374.77734375,
+   "bm25_avg_ms": 919.8219499407696,
+   "loop_lag_max_ms": 77.27813099918421
+  }
+ ],
+ "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\nsock_throttled 0\n"
+}

@@ -4,34 +4,19 @@
     "type": "split",
     "children": [
       {
-        "id": "265decf5a2509abc",
+        "id": "c1d9bf732e493a32",
         "type": "tabs",
         "children": [
           {
-            "id": "71b9571c68deb0cf",
+            "id": "b757ad5d952cb266",
             "type": "leaf",
             "state": {
-              "type": "kanban",
+              "type": "excalidraw",
               "state": {
-                "file": "docs/todo/Run the final evaluation.md",
-                "kanbanViewState": {
-                  "kanban-plugin": "board",
-                  "list-collapse": [
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false
-                  ]
-                }
+                "file": "docs/research/research_map.excalidraw"
               },
-              "icon": "lucide-trello",
-              "title": "Run the final evaluation"
+              "icon": "excalidraw-icon",
+              "title": "research_map"
             }
           }
         ]
@@ -189,18 +174,38 @@
   },
   "left-ribbon": {
     "hiddenItems": {
-      "obsidian-kanban:Create new board": false,
       "switcher:Open quick switcher": false,
       "graph:Open graph view": false,
       "canvas:Create new canvas": false,
       "daily-notes:Open today's daily note": false,
       "templates:Insert template": false,
       "command-palette:Open command palette": false,
-      "bases:Create new base": false
+      "bases:Create new base": false,
+      "obsidian-kanban:Create new board": false,
+      "obsidian-excalidraw-plugin:New drawing": false
     }
   },
-  "active": "71b9571c68deb0cf",
+  "active": "b757ad5d952cb266",
   "lastOpenFiles": [
+    "exploration/reranker_dev/data/deep_colbert_lateon_stats.json",
+    "exploration/reranker_dev/data/deep_scores_lateon.json",
+    "exploration/reranker_dev/data/deep_scores_lateon.partial.tmp",
+    "exploration/reranker_dev/data/deep_scores_lateon.partial.json",
+    "exploration/reranker_dev/data/deep_colbert_lateon-full_stats.json",
+    "exploration/reranker_dev/data/deep_answered_summary.json",
+    "exploration/reranker_dev/data/deep_scores_lateon-full.json",
+    "exploration/reranker_dev/data/deep_scores_lateon-full.partial.tmp",
+    "exploration/reranker_dev/data/deep_scores_lateon-full.partial.json",
+    "exploration/reranker_dev/__pycache__/score.cpython-313.pyc",
+    "exploration/reranker_dev/__pycache__/deep_score.cpython-313.pyc",
+    "docs/superpowers/plans/2026-11-25-lateon-deep-full-context.md",
+    "docs/todo/Support the excalidraw.md format in the map scripts.md",
+    "docs/articles/000_the_article.md",
+    "docs/todo/Review CLIP as an alternative to LLM video descriptions.md",
+    "docs/todo/Investigate the reranker cost and how to reduce it.md",
+    "docs/research/research_map.canvas",
+    "docs/todo/AWS infrastructure for the solution.md",
+    "docs/articles/010_aws_architecture.md",
     "docs/todo/evaluation/E17 Write up the results.md",
     "docs/todo/evaluation/E16 Run the full evaluation.md",
     "docs/todo/evaluation/E15 Smoke-test both systems.md",
@@ -218,27 +223,8 @@
     "docs/todo/evaluation/E03 Judge strict and lenient.md",
     "docs/todo/evaluation/E02 Write memory notes v3 in tiers.md",
     "docs/todo/evaluation/E01 Label ambiguity and alternate gold.md",
-    "docs/todo/evaluation",
     "docs/todo.md",
-    "docs/todo/Run the final evaluation.md.tmp.11224.5621015aa06d",
-    "docs/todo/Run the final evaluation.md",
-    "docs/todo/sedRnFnh2",
-    "docs/todo/Run the final evaluation.md.tmp.11224.eb09a93170f1",
-    "exploration/slm_fields/runs/mine-r16-e2/state/done/part1.env",
-    "exploration/slm_fields/runs/mine-r16-e2/out/part1/stop.log",
-    "exploration/slm_fields/runs/mine-r16-e2/out/part1/shard_04.done",
-    "exploration/slm_fields/runs/mine-r16-e2/out/part1/shard_04.jsonl",
-    "exploration/slm_fields/runs/mine-r16-e2/out/part1/shard_03.done",
-    "exploration/slm_fields/runs/mine-r16-e2/out/part1/shard_03.jsonl",
-    "docs/todo/Port the prod path to LangGraph.md",
-    "docs/todo/Article - detect data drift for the SLM.md",
-    "docs/articles/000_the_article.md",
-    "docs/todo/Private and personal data questions.md",
-    "docs/superpowers/specs/2026-11-23-evaluation-update-design.md",
-    "docs/brainstorm/007_evaluation_drift.md",
-    "docs/articles/009_reviewed_detecting_data_drift_for_the_slm.md",
     "docs/todo_roadmap.canvas",
-    "docs/research/research_map.canvas",
     "docs/research/semantic_search_failure_problem.canvas",
     "docs/research/document_growth_problem.canvas",
     "docs/research/data_preprocessing_problem.canvas",

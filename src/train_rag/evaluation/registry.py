@@ -10,6 +10,7 @@ from train_rag.evaluation.agent import AgentSystem
 from train_rag.evaluation.agent_clarify import ClarifyingSnippetAgent
 from train_rag.evaluation.agent_keywords import KeywordAgentSystem
 from train_rag.evaluation.agent_snippets import SnippetAgentSystem
+from train_rag.evaluation.field_agent.retriever import FieldAgentRetriever
 from train_rag.evaluation.field_agent.system import ClarifyingFieldAgent, FieldAgentSystem
 from train_rag.evaluation.hybrid import PipelineRetriever
 from train_rag.evaluation.judge import AnswerJudge, GeminiJudge
@@ -23,7 +24,7 @@ from train_rag.evaluation.usage import UsageMeter
 from train_rag.index_bm25 import bm25_index_dir
 from train_rag.models import Question
 from train_rag.pipelines.retrieval import RetrievalPipeline
-from train_rag.reranker import SHORT_TOKENS
+from train_rag.reranker import FULL_TOKENS, SHORT_TOKENS
 from train_rag.retrieval import Bm25Retriever, EmbeddingRetriever, Retriever
 
 SystemFactory = Callable[[Sequence[Question]], RagSystem]
@@ -94,16 +95,31 @@ RETRIEVERS: dict[str, RetrieverFactory] = {
         )
     ),
     "hybrid-ft-rerank": lambda sample: PipelineRetriever(
-        RetrievalPipeline.load(bm25_index_dir(sample), rerank=True, embedder=FineTunedGteEmbedder())
+        RetrievalPipeline.load(
+            bm25_index_dir(sample),
+            rerank=True,
+            embedder=FineTunedGteEmbedder(),
+            rerank_tokens=FULL_TOKENS,
+            reranker="cross-encoder",
+        )
     ),
-    # The accepted first search, without the paid rewrites: the union of both searches,
-    # reranked on the first 1,024 tokens.
+    # The first search until 25 Nov, without the paid rewrites: the union of both searches,
+    # reranked by the cross-encoder on the first 1,024 tokens.
     "hybrid-ft-union": lambda sample: PipelineRetriever(
         RetrievalPipeline.load(
             bm25_index_dir(sample),
             embedder=FineTunedGteEmbedder(),
             union=True,
             rerank_tokens=SHORT_TOKENS,
+            reranker="cross-encoder",
         )
     ),
+    # The accepted first search since 25 Nov: the union of both searches' top 100,
+    # reranked by LateOn (late interaction) on the first 1,024 tokens.
+    "hybrid-ft-lateon": lambda sample: PipelineRetriever(
+        RetrievalPipeline.load(bm25_index_dir(sample), embedder=FineTunedGteEmbedder(), union=True)
+    ),
+    # The accepted pipeline's agent (general + field search, the check), never asking and
+    # writing no answer: its final documents, then its other candidates. Gemini, paid.
+    FieldAgentRetriever.name: lambda _sample: FieldAgentRetriever.load(genai.Client(), USAGE),
 }

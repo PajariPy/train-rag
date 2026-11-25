@@ -20,6 +20,7 @@ The pipeline is async, so several queries can run at once on one loaded model an
 
 import asyncio
 from pathlib import Path
+from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlmodel import Session
@@ -36,20 +37,43 @@ from train_rag.pipelines.describe import describe_documents
 from train_rag.processing.normalize import normalize_text
 from train_rag.repository.embedding import embedded_sources
 from train_rag.repository.search import nearest_chunks
-from train_rag.reranker import FULL_TOKENS, GteModernBertReranker, Reranker
+from train_rag.reranker import (
+    SHORT_TOKENS,
+    GteModernBertReranker,
+    LateOnReranker,
+    Reranker,
+)
 from train_rag.retrieval import CHUNKS_PER_DOCUMENT, Bm25Retriever
 from train_rag.tables import tables_for
 
-# Documents taken from each ranking into the fusion.
-CANDIDATES = 50
+# Documents taken from each ranking into the fusion. 100 since 25 Nov: LateOn is cheap
+# enough to rerank both lists whole (~190 documents), +1.3 points ans@5 on the dev set.
+CANDIDATES = 100
 # Fused documents the reranker reads; the final results are picked from these.
 RERANK_DEPTH = 50
+
+
+def load_reranker(kind: Literal["lateon", "cross-encoder"], max_tokens: int) -> Reranker:
+    """Load a reranker by kind.
+
+    Args:
+        kind: "lateon" or "cross-encoder".
+        max_tokens: Tokens of each document it reads.
+
+    Returns:
+        The loaded reranker.
+    """
+    if kind == "lateon":
+        return LateOnReranker(max_tokens=max_tokens)
+
+    return GteModernBertReranker(max_tokens=max_tokens)
 
 
 class RetrievalPipeline:
     """Hybrid search over the whole corpus: BM25 and gte-modernbert chunks, fused with RRF.
 
-    With a reranker, the fused documents are reordered by a cross-encoder.
+    With a reranker, the fused documents are reordered: by LateOn (late interaction, the
+    default since 25 Nov) or by the gte-reranker-modernbert cross-encoder.
     """
 
     def __init__(
@@ -68,9 +92,9 @@ class RetrievalPipeline:
             embedder: Model the stored chunk vectors come from.
             bm25: Loaded BM25 index.
             sources: Sources with chunks from the embedder.
-            reranker: Cross-encoder that reorders the fused documents, or None to keep
-                the fusion's order.
-            union: Rerank every document either search found (about 97) instead of the
+            reranker: Reranker that reorders the fused documents, or None to keep the
+                fusion's order.
+            union: Rerank every document either search found (about 190) instead of the
                 fused top `RERANK_DEPTH`.
         """
         self.engine = engine
@@ -89,17 +113,21 @@ class RetrievalPipeline:
         rerank: bool = True,
         embedder: Embedder | None = None,
         union: bool = False,
-        rerank_tokens: int = FULL_TOKENS,
+        rerank_tokens: int = SHORT_TOKENS,
+        reranker: Literal["lateon", "cross-encoder"] = "lateon",
     ) -> "RetrievalPipeline":
         """Load gte-modernbert, the BM25 index of the whole corpus and the reranker.
 
         Args:
             index_dir: Folder of the BM25 index; the whole corpus's by default.
-            rerank: Load gte-reranker-modernbert and rerank the fused documents.
+            rerank: Load the reranker and rerank the fused documents.
             embedder: The embedder to search with; the base gte-modernbert by default. A
                 fine-tuned one searches its own tables.
-            union: Rerank the union of both searches instead of the fused top 50.
+            union: Rerank the union of both searches instead of the fused top
+                `RERANK_DEPTH`.
             rerank_tokens: Tokens of each document the reranker reads.
+            reranker: "lateon" (accepted, 25 Nov) or "cross-encoder" (gte-reranker-modernbert,
+                the earlier pipeline's).
 
         Returns:
             The ready pipeline.
@@ -115,7 +143,7 @@ class RetrievalPipeline:
             embedder,
             Bm25Retriever(index_dir or bm25_index_dir(None)),
             sources,
-            GteModernBertReranker(max_tokens=rerank_tokens) if rerank else None,
+            load_reranker(reranker, rerank_tokens) if rerank else None,
             union,
         )
 
@@ -277,7 +305,7 @@ class RetrievalPipeline:
         """Order documents by the reranker's score of their title and text.
 
         Args:
-            reranker: Cross-encoder to score with.
+            reranker: Reranker to score with.
             query: Normalized query.
             documents: Documents with title and text.
 
@@ -297,4 +325,3 @@ class RetrievalPipeline:
     async def close(self) -> None:
         """Close the database connections."""
         await self.engine.dispose()
-

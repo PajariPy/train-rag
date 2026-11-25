@@ -1,6 +1,6 @@
 Write the production path with LangGraph and LangChain chat models, when the prod code is
 prepared: the field agent (general and field search, the check, asking the person) and the
-cited answer. Nothing else.
+cited answer. Nothing else. ^desc
 
 ## Why
 The agent loop (`evaluation/field_agent/loop.py`) is already a hand-written state machine.

@@ -6,7 +6,7 @@ to use which): on the Slack dev set that was the biggest single gain (article 00
 
 from google.genai import types
 
-from train_rag.mined_fields.index import PROFILE_COLUMNS, FieldIndex
+from train_rag.mined_fields.index import PROFILE_COLUMNS, FieldSearch
 from train_rag.mined_fields.schema import AREA_GUIDE, AREAS, SOURCE_KINDS
 from train_rag.prompts import prompt
 
@@ -125,7 +125,7 @@ def declarations(can_ask: bool) -> list[types.FunctionDeclaration]:
 
 
 def agent_instructions(
-    index: FieldIndex,
+    index: FieldSearch,
     max_searches: int,
     max_general: int,
     max_asks: int,
