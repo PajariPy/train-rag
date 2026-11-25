@@ -1,0 +1,51 @@
+{
+ "gpu": "NVIDIA RTX 2000 Ada Generation Laptop GPU",
+ "torch": "2.15.0+cu132",
+ "query_embedding": {
+  "question_tokens_median": 38.0,
+  "batch_1": {
+   "questions_per_s": 34.23182369415659,
+   "ms_per_batch": 29.212583265632475
+  },
+  "batch_8": {
+   "questions_per_s": 200.5550769145393,
+   "ms_per_batch": 39.88929187471513
+  },
+  "batch_32": {
+   "questions_per_s": 653.9644194236464,
+   "ms_per_batch": 48.93232574977446
+  },
+  "batch_64": {
+   "questions_per_s": 783.6229805814617,
+   "ms_per_batch": 81.67192844767123
+  }
+ },
+ "document_embedding": {
+  "documents": 600,
+  "seconds": 30.56299820199638,
+  "documents_per_s": 19.63158182435151,
+  "tokens_per_s": 25529.465232538394,
+  "doc_tokens_median": 1139.0,
+  "doc_tokens_p90": 2187,
+  "share_cut_at_8192": 0.0
+ },
+ "rerank": {
+  "pair_tokens_median": 1024.0,
+  "share_cut_at_1024": 0.606,
+  "batch_8": {
+   "pairs_per_s": 37.58498876927129,
+   "questions_per_s": 0.3758498876927129,
+   "ms_per_question_median": 2663.722258999769
+  },
+  "batch_16": {
+   "pairs_per_s": 35.04669674129177,
+   "questions_per_s": 0.35046696741291766,
+   "ms_per_question_median": 2848.4543090016814
+  },
+  "batch_32": {
+   "pairs_per_s": 33.37188398493353,
+   "questions_per_s": 0.33371883984933537,
+   "ms_per_question_median": 3006.7044320021523
+  }
+ }
+}

@@ -1,52 +1,73 @@
-# Taking the pipeline to AWS
+# Running the pipeline on AWS
 
 > [!note] Status
-> Draft. Architecture and one load test; prices come in the next round. Working notes with
-> every detail: `docs/architecture/001_aws_architecture.md`.
+> Draft. A section of the main article, after the pipeline is built and evaluated.
+> Architecture and one load test; prices come in the next round. Working notes with every
+> detail: `docs/architecture/001_aws_architecture.md`.
 
-So far everything ran on my machine and on rented GPUs: Postgres in Docker, the models in
-Python, an evaluation script calling Gemini. This article is the first design for running it
-as a service on AWS: what goes where, why, and what one load test says about the size of it.
+In the sections above, everything ran on my machine and on rented GPUs: Postgres in Docker,
+the models in Python, an evaluation script calling Gemini. This section moves the same pipeline
+to AWS as a service: what goes where, why, and what one load test says about its size.
 
-The system has two parts that share one database. A nightly job pulls only what changed in the
+The service has two parts that share one database. A nightly job pulls only what changed in the
 nine sources (Jira, Slack, Gmail, Fireflies and the rest), runs the SLM and the embedder on the
 new documents, writes them to Postgres and stops. An always-on query service takes questions,
 runs the pipeline and streams the answer back.
 
 ## The diagram
 
-![[aws_architecture.png]]
+![train-rag on AWS: services and how they connect](../architecture/aws_architecture.png)
 
-The picture only shows services and how they connect; an arrow with two heads is a request and
-its response. What each one does is in the table below. I tried drawing the steps inside each
-service first, and the diagram grew large and still couldn't hold a proper description.
+The architecture has two pipelines that share one database.
 
-| Service | Role | What it does |
-|---|---|---|
-| EventBridge Scheduler | Nightly trigger | Starts the ingestion workflow at 02:00. Weekly is the same rule with another cron expression. |
-| AWS Step Functions | Ingestion workflow | Runs the ingestion task, retries or alerts on failure, then restarts the query service so it loads the new BM25 index. |
-| AWS Fargate | Ingestion task | One CPU container: fetches what changed, sends new documents to the SLM and gte endpoints, writes Postgres, rebuilds BM25 into S3, moves the watermarks and stops. |
-| NAT gateway | Outbound internet | Lets the tasks in private subnets reach the source APIs, and Gemini if I keep it. |
-| SageMaker async endpoint | SLM field extractor | Qwen3.5-2B with the merged LoRA on a GPU. Scales to zero between runs; requests queue while it wakes up. |
-| SageMaker real-time endpoint | gte embedder | The fine-tuned gte. Query vectors for every question, document vectors for ingestion. Always on. |
-| SageMaker real-time endpoint | gte reranker | Scores ~100 documents per question. Always on. |
-| Amazon S3 | Raw changes, BM25 index | Each night's raw changes (for replay) and the BM25 index files. |
-| PostgreSQL (RDS or EC2) | Index database | Documents, vectors, extracted fields, watermarks and content hashes. Which Postgres is still open. |
-| Application Load Balancer | Streaming endpoint | The HTTPS entry point; streams answers as server-sent events. |
-| AWS Fargate | Query service · 1 vCPU, 2 GB | The pipeline without the models: BM25, vector search, calls to the endpoints, the field agent, the cited answer. |
-| Amazon Bedrock or Gemini | Answer LLM | The model behind the field agent and the answer. |
-| ECR, CloudWatch, Secrets Manager | Shared | Container images; logs, metrics and alarms; API keys and the database password. |
+**The ingestion pipeline** runs once a day, or on any other schedule. EventBridge Scheduler
+starts a Step Functions workflow, which runs the ingestion task on Fargate. The task asks the
+data sources for what changed since the last run, sends the new documents to the SLM and the
+embedder on SageMaker, writes the results to Postgres, and puts the raw changes and a fresh
+BM25 index in S3. Then it stops, so it costs nothing between runs.
+
+**The inference pipeline** runs all the time. A question comes in through the load balancer to
+the query service on Fargate. The query service searches with BM25 and in Postgres, calls the
+embedder and the reranker on SageMaker, asks the LLM for the answer and streams it back.
+
+Postgres links the two: ingestion writes to it, inference reads from it. The calls to the data
+sources and to Gemini leave AWS through the NAT gateway. ECR, CloudWatch and Secrets Manager
+serve both pipelines.
+
+### All services
+
+| Part | Service | Role | What it does |
+|---|---|---|---|
+| Ingestion | Amazon EventBridge Scheduler | Nightly trigger | Starts the ingestion workflow at 02:00. Weekly is the same rule with another cron expression. |
+| Ingestion | AWS Step Functions | Ingestion workflow | Runs the ingestion task, retries or alerts on failure, then restarts the query service so it loads the new BM25 index. |
+| Ingestion | AWS Fargate | Ingestion task | One CPU container: fetches what changed, sends new documents to the SLM and gte endpoints, writes Postgres, rebuilds BM25 into S3, moves the watermarks and stops. |
+| Ingestion | NAT gateway | Outbound internet | Lets the tasks in the private network reach the source APIs, and Gemini if it stays the LLM. |
+| Ingestion | Data sources (outside AWS) | Jira, Slack, Fireflies … | The nine company tools the documents come from, read through their APIs. |
+| Models | Amazon SageMaker async endpoint | SLM field extractor | Qwen3.5-2B with the merged LoRA on a GPU. Scales to zero between runs; requests queue while it wakes up. |
+| Models | Amazon SageMaker real-time endpoint | gte embedder | The fine-tuned gte on a GPU. Query vectors for every question, document vectors for ingestion. Always on. |
+| Models | Amazon SageMaker real-time endpoint | gte reranker | Scores ~100 documents per question on a GPU. Always on. |
+| Storage | PostgreSQL (Amazon RDS or EC2) | Index database | Documents, vectors, extracted fields, watermarks and content hashes. Which Postgres is still open. |
+| Storage | Amazon S3 | Raw changes, BM25 index | Each night's raw changes (for replay) and the BM25 index files. |
+| Inference | Application Load Balancer | Streaming endpoint | The HTTPS entry point; streams answers as server-sent events. |
+| Inference | AWS Fargate | Query service | The pipeline without the models: BM25, vector search, calls to the endpoints, the field agent, the cited answer. |
+| Inference | Amazon Bedrock or Gemini | Answer LLM | The model behind the field agent and the answer. |
+| Shared | Amazon ECR | Container images | The images of the ingestion task and the query service. |
+| Shared | Amazon CloudWatch | Logs, metrics, alarms | Logs of every service, the metrics that drive scaling, alarms on failed runs. |
+| Shared | AWS Secrets Manager | API keys | Source API tokens, the Gemini key and the database password. |
 
 ## Ingestion: only what changed
 
-Re-reading 500k documents every night would be slow and expensive, so each source keeps a
-watermark: the time of the last good run, minus a small overlap. Most APIs can filter on
-"updated since" (JQL `updated >=` in Jira, `history.list` in Gmail, `changes.list` in Drive,
-`fromDate` in Fireflies). A content hash per document skips anything that came back unchanged,
-so the SLM and the embedder only see real changes.
+Re-reading 500k documents on every run would be slow and expensive, so each run should fetch
+only what changed since the last good one. How to ask for that has to be worked out for each
+source separately. Most APIs can filter by modification time, some keep a change log or a
+cursor to continue from, and for the rest changes have to be found by comparison. A content
+hash per document then skips anything that came back unchanged, so the SLM and the embedder
+only see real changes.
 
-Deletions are the hard part. Gmail and Drive report them; for the rest, a weekly job lists
-every id at the source and deletes what's gone. It reads ids, not content, so it's cheap.
+Deletions are harder, and the way to detect them has to be worked out for each source
+separately. Some APIs report deleted items directly. For the others, deletions have to be
+inferred: for example by comparing the ids at the source with the ids in the database, by
+comparing content hashes, or by another signal the source offers.
 
 The whole run is one Fargate task, started by Step Functions. Fargate has no time limit, and it
 bills only the minutes the task runs. If a run fails, the watermarks stay where they were and
@@ -54,11 +75,8 @@ the next run, or a replay from the raw changes in S3, picks it up.
 
 ## Where the models run
 
-My first idea was Amazon Bedrock for all three models. It doesn't work: Bedrock's Custom Model
-Import doesn't take embedding models, the reranker isn't a text-generation model either, and its
-Qwen support didn't list Qwen3.5.
-
-SageMaker endpoints take any container, so the models go there:
+The three models run on Amazon SageMaker endpoints, which can serve any model from its own
+container:
 
 - **The SLM** on an async endpoint with AWS's vLLM image. Its current version runs vLLM 0.33.0,
   the same version I mined the corpus with, and its changelog lists Qwen3.5-2B. I serve the
@@ -142,7 +160,6 @@ For a service that mostly waits, a small always-on task fits better.
 
 - [Building a Production RAG Pipeline on AWS Lambda and pgvector](https://harun.dev/blog/building-a-production-rag-pipeline-on-aws-lambda-pgvector), the article I started from
 - [pgvectorscale request on AWS re:Post](https://repost.aws/questions/QUEgTTEzDeQdCoo5UJIEGAYw/add-pgvectorscale-extension-to-amazon-rds-aurora-postgresql-for-diskann-hnsw-hybrid-vector-search)
-- [Bedrock Custom Model Import](https://docs.aws.amazon.com/bedrock/latest/userguide/model-customization-import-model.html)
 - [AWS vLLM container for SageMaker](https://aws.github.io/deep-learning-containers/vllm/deployment/sagemaker/) and its [changelog](https://aws.github.io/deep-learning-containers/vllm/changelog/)
 - [vLLM issue #49354: Qwen3.5 LoRA adapters ignored](https://github.com/vllm-project/vllm/issues/49354)
 - [Text Embeddings Inference: supported models](https://huggingface.co/docs/text-embeddings-inference/supported_models)

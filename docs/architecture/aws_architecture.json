@@ -18,7 +18,7 @@
     {"id": "ingest", "x": 660, "y": 330, "icon": "aws-fargate", "service": "AWS Fargate", "role": "Ingestion task"},
     {"id": "rds", "x": 660, "y": 520, "icon": "aws-rds", "service": "PostgreSQL (RDS or EC2)", "role": "Index database"},
     {"id": "alb", "x": 420, "y": 710, "icon": "aws-alb", "service": "Application Load Balancer", "role": "Streaming endpoint"},
-    {"id": "query", "x": 660, "y": 710, "icon": "aws-fargate", "service": "AWS Fargate", "role": "Query service · 1 vCPU, 2 GB"},
+    {"id": "query", "x": 660, "y": 710, "icon": "aws-fargate", "service": "AWS Fargate", "role": "Query service"},
     {"id": "slm", "x": 985, "y": 330, "icon": "aws-model", "service": "Async endpoint", "role": "SLM field extractor"},
     {"id": "gte", "x": 985, "y": 520, "icon": "aws-model", "service": "Real-time endpoint", "role": "gte embedder"},
     {"id": "rerank", "x": 985, "y": 710, "icon": "aws-model", "service": "Real-time endpoint", "role": "gte reranker"},

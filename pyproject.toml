@@ -70,7 +70,7 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["bm25s", "Stemmer"]
+module = ["bm25s", "Stemmer", "pandas"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

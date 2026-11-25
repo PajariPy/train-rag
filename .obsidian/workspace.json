@@ -4,76 +4,22 @@
     "type": "split",
     "children": [
       {
-        "id": "265decf5a2509abc",
+        "id": "c1d9bf732e493a32",
         "type": "tabs",
         "children": [
           {
-            "id": "71b9571c68deb0cf",
+            "id": "b757ad5d952cb266",
             "type": "leaf",
-            "pinned": true,
             "state": {
-              "type": "kanban",
+              "type": "excalidraw",
               "state": {
-                "file": "docs/todo.md",
-                "kanbanViewState": {
-                  "kanban-plugin": "board",
-                  "list-collapse": [
-                    false,
-                    false,
-                    false,
-                    false,
-                    false
-                  ]
-                }
+                "file": "docs/research/research_map.excalidraw"
               },
-              "pinned": true,
-              "icon": "lucide-trello",
-              "title": "todo"
-            }
-          },
-          {
-            "id": "2eab329c21602d3e",
-            "type": "leaf",
-            "pinned": true,
-            "state": {
-              "type": "canvas",
-              "state": {
-                "file": "docs/research/research_map.canvas",
-                "viewState": {
-                  "x": 13060.906474690979,
-                  "y": 1516.7792778870203,
-                  "zoom": -1.0933333333333337
-                }
-              },
-              "pinned": true,
-              "icon": "lucide-layout-dashboard",
+              "icon": "excalidraw-icon",
               "title": "research_map"
             }
-          },
-          {
-            "id": "0a6325ee4e037ab6",
-            "type": "leaf",
-            "state": {
-              "type": "kanban",
-              "state": {
-                "file": "docs/todo.md",
-                "kanbanViewState": {
-                  "kanban-plugin": "board",
-                  "list-collapse": [
-                    false,
-                    false,
-                    false,
-                    false,
-                    false
-                  ]
-                }
-              },
-              "icon": "lucide-trello",
-              "title": "todo"
-            }
           }
-        ],
-        "currentTab": 2
+        ]
       }
     ],
     "direction": "vertical"
@@ -228,7 +174,6 @@
   },
   "left-ribbon": {
     "hiddenItems": {
-      "obsidian-kanban:Create new board": false,
       "switcher:Open quick switcher": false,
       "graph:Open graph view": false,
       "canvas:Create new canvas": false,
@@ -236,55 +181,50 @@
       "templates:Insert template": false,
       "command-palette:Open command palette": false,
       "bases:Create new base": false,
-      "drawio:Launch draw.io editor": false,
+      "obsidian-kanban:Create new board": false,
       "obsidian-excalidraw-plugin:New drawing": false
     }
   },
-  "active": "0a6325ee4e037ab6",
+  "active": "b757ad5d952cb266",
   "lastOpenFiles": [
-    "docs/todo_roadmap.canvas",
-    "docs/todo_roadmap.excalidraw",
-    "docs/todo_roadmap.png",
-    "docs/vast_ai.md",
-    "docs/solution_plan.md",
-    "docs/research/research_map.excalidraw",
-    "docs/articles/010_aws_architecture.md",
-    "docs/articles/010_aws_architecture.md.tmp.436490.4195a06a1270",
-    "docs/research/research_map.png",
-    "exploration/load_test/results_mmap.json",
-    "docs/architecture/aws_architecture.excalidraw",
-    "exploration/load_test/results_inmemory.json",
-    "docs/research/sed4NItZO",
-    "docs/research/canvas_to_excalidraw.py",
-    "docs/research/canvas_to_excalidraw.py.tmp.9902.ef1220456a22",
-    "exploration/load_test/run.sh",
-    "docs/architecture/aws_architecture.svg",
-    "docs/architecture/aws_architecture.png",
-    "docs/architecture/aws_architecture.canvas",
-    "docs/architecture/001_aws_architecture.md",
-    "docs/todo/Run the final evaluation.md",
-    "docs/architecture/icons/aws-model.svg",
-    "docs/todo.md",
-    "docs/todo/AWS infrastructure for the solution.md",
+    "exploration/reranker_dev/data/deep_colbert_lateon_stats.json",
+    "exploration/reranker_dev/data/deep_scores_lateon.json",
+    "exploration/reranker_dev/data/deep_scores_lateon.partial.tmp",
+    "exploration/reranker_dev/data/deep_scores_lateon.partial.json",
+    "exploration/reranker_dev/data/deep_colbert_lateon-full_stats.json",
+    "exploration/reranker_dev/data/deep_answered_summary.json",
+    "exploration/reranker_dev/data/deep_scores_lateon-full.json",
+    "exploration/reranker_dev/data/deep_scores_lateon-full.partial.tmp",
+    "exploration/reranker_dev/data/deep_scores_lateon-full.partial.json",
+    "exploration/reranker_dev/__pycache__/score.cpython-313.pyc",
+    "exploration/reranker_dev/__pycache__/deep_score.cpython-313.pyc",
+    "docs/superpowers/plans/2026-11-25-lateon-deep-full-context.md",
+    "docs/todo/Support the excalidraw.md format in the map scripts.md",
+    "docs/articles/000_the_article.md",
+    "docs/todo/Review CLIP as an alternative to LLM video descriptions.md",
+    "docs/todo/Investigate the reranker cost and how to reduce it.md",
     "docs/research/research_map.canvas",
-    "docs/todo/evaluation/off-topic-set-verified-rounds.md",
-    "docs/todo/evaluation/import-embed-mined-fields.md",
-    "docs/todo/evaluation/results-write-up.md",
-    "docs/todo/evaluation/full-evaluation-run.md",
-    "docs/todo/evaluation/smoke-test-clarify.md",
-    "docs/todo/evaluation/refusal-verdict.md",
-    "docs/todo/evaluation/off-topic-set-recheck.md",
-    "docs/todo/evaluation/off-topic-set-build.md",
-    "docs/todo/evaluation/ragas-judge-build-eval.md",
-    "docs/todo/evaluation/report-splits.md",
-    "docs/todo/evaluation/refusal-counts.md",
-    "docs/todo/evaluation/stage-timing-cost.md",
-    "docs/todo/evaluation/agent-effort-metrics.md",
-    "docs/todo/evaluation/retrieval-metrics.md",
-    "docs/todo/evaluation/citation-metrics.md",
-    "docs/todo/evaluation/judge-strict-lenient.md",
-    "docs/todo/evaluation/memory-notes-v3-tiers.md",
-    "docs/todo/evaluation/ambiguity-labels-alternate-gold.md",
+    "docs/todo/AWS infrastructure for the solution.md",
+    "docs/articles/010_aws_architecture.md",
+    "docs/todo/evaluation/E17 Write up the results.md",
+    "docs/todo/evaluation/E16 Run the full evaluation.md",
+    "docs/todo/evaluation/E15 Smoke-test both systems.md",
+    "docs/todo/evaluation/E14 Compare with the ragas library.md",
+    "docs/todo/evaluation/E13 Add the refusal verdict.md",
+    "docs/todo/evaluation/E12 Recheck the off-topic set.md",
+    "docs/todo/evaluation/E11 Build the off-topic set.md",
+    "docs/todo/evaluation/E10 Judge RAGAS metrics with Gemini.md",
+    "docs/todo/evaluation/E09 Split the report.md",
+    "docs/todo/evaluation/E08 Count refusals.md",
+    "docs/todo/evaluation/E07 Time every stage and price it.md",
+    "docs/todo/evaluation/E06 Measure agent effort.md",
+    "docs/todo/evaluation/E05 Add retrieval metrics.md",
+    "docs/todo/evaluation/E04 Score citations.md",
+    "docs/todo/evaluation/E03 Judge strict and lenient.md",
+    "docs/todo/evaluation/E02 Write memory notes v3 in tiers.md",
+    "docs/todo/evaluation/E01 Label ambiguity and alternate gold.md",
+    "docs/todo.md",
+    "docs/todo_roadmap.canvas",
     "docs/research/semantic_search_failure_problem.canvas",
     "docs/research/document_growth_problem.canvas",
     "docs/research/data_preprocessing_problem.canvas",

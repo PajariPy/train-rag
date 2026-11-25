@@ -6,12 +6,15 @@ kanban-plugin: board
 
 ## Backlog
 
+- [ ] [[Support the excalidraw.md format in the map scripts]]: teach the drawing scripts the plugin's new format, then convert #low
 - [ ] [[off-topic-set-verified-rounds]]: careful, rerunnable off-topic set with search and ratings #evaluation #low
 - [ ] [[fix-cut-long-documents]]: full fields for the 3,151 long documents the SLM read cut #evaluation #low
 
 
 ## Later
 
+- [ ] [[Investigate the reranker cost and how to reduce it]]: reranking dominates the AWS bill; measure quality vs cost and cheaper setups #medium
+- [ ] [[Review CLIP as an alternative to LLM video descriptions]]: embed video frames instead of describing videos with an LLM #medium
 - [ ] [[Private and personal data questions]]: how to answer about salaries, HR records and other private data (article only) #article-only #medium
 - [ ] [[Port the prod path to LangGraph]]: the prod agent as a LangGraph graph, when the prod code is written #medium
 - [ ] [[Add observability and RAG quality tracking]]: traces per request and quality metrics from real chats #medium
